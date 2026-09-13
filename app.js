@@ -103,9 +103,33 @@
     } catch (_) {}
   }
 
+  function choiceStorageKey(name) {
+    return currentProfile?.id ? `tripSplitLastChoice:${currentProfile.id}:${name}` : null;
+  }
+
+  function getRememberedChoice(name) {
+    try {
+      const key = choiceStorageKey(name);
+      return key ? localStorage.getItem(key) : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function rememberChoice(name, value) {
+    try {
+      const key = choiceStorageKey(name);
+      if (key && value) localStorage.setItem(key, value);
+    } catch (_) {}
+  }
+
   function originalEnteredBy(expenseId) {
     const first = allVersions.find((v) => v.expense_id === expenseId && Number(v.version_no) === 1);
     return first?.changed_by || null;
+  }
+
+  function canManageExpense(expenseId) {
+    return Boolean(currentProfile && (currentProfile.is_admin || originalEnteredBy(expenseId) === currentProfile.id));
   }
 
   function isNetworkLikeError(e) {
@@ -124,7 +148,7 @@
 
   function persistLocalMirror() {
     try {
-      localStorage.setItem("tripSplitMirrorV32", JSON.stringify({
+      localStorage.setItem("tripSplitMirrorV35", JSON.stringify({
         saved_at: new Date().toISOString(),
         profiles: allProfiles,
         expense_versions: allVersions
@@ -216,6 +240,11 @@
     if (!$("expenseDate").value) $("expenseDate").value = today;
     $("editSpentOn").max = today;
 
+    const rememberedCurrency = getRememberedChoice("currency");
+    if (CURRENCIES.includes(rememberedCurrency)) $("expenseCurrency").value = rememberedCurrency;
+    const rememberedPayment = getRememberedChoice("payment");
+    if (["Kart", "Cash"].includes(rememberedPayment)) $("expensePayment").value = rememberedPayment;
+
     setScreen("app");
     switchPage("add");
     await loadBaseData();
@@ -243,6 +272,7 @@
     populateSelectors();
     renderParticipantPickers();
     renderReport();
+    renderMyEntries();
   }
 
   function populateSelectors() {
@@ -341,6 +371,32 @@
 
   function activeExpenses() {
     return currentExpenses.filter((e) => e.status === "active");
+  }
+
+  function renderMyEntries() {
+    if (!currentProfile) return;
+    const rows = currentExpenses.filter((e) => originalEnteredBy(e.expense_id) === currentProfile.id);
+    $("myEntriesEmpty").classList.toggle("hidden", rows.length > 0);
+    $("myEntriesList").innerHTML = rows.map((e) => {
+      const isActive = e.status === "active";
+      const people = e.participant_ids.map(profileName).join(", ");
+      return `<button type="button" class="my-entry-card ${isActive ? "" : "is-voided"}" data-id="${e.expense_id}" ${isActive ? "" : "disabled"}>
+        <div class="my-entry-top">
+          <span class="my-entry-date">${formatDateOnly(e.spent_on)}</span>
+          <span class="my-entry-status ${isActive ? "" : "voided"}">${isActive ? "Aktif" : "İptal"}</span>
+        </div>
+        <div class="my-entry-bottom">
+          <span class="my-entry-detail">${escapeHtml(e.description)}</span>
+          <span class="my-entry-amount">${formatAmount(e.amount, e.currency)} ${e.currency}</span>
+        </div>
+        <div class="my-entry-meta">Harcayan: ${escapeHtml(profileName(e.payer_id))} • ${escapeHtml(e.payment_type)}<br>Borca ortak: ${escapeHtml(people)}</div>
+        <div class="my-entry-action">${isActive ? "Dokun → Düzelt / İptal Et" : `İptal edilmiş kayıt • v${e.version_no}`}</div>
+      </button>`;
+    }).join("");
+
+    $("myEntriesList").querySelectorAll("button[data-id]:not([disabled])").forEach((button) => {
+      button.addEventListener("click", () => openAdminModal(button.dataset.id));
+    });
   }
 
   function filteredExpenses() {
@@ -492,9 +548,9 @@
   }
 
   function openAdminModal(expenseId) {
-    if (!currentProfile?.is_admin) return;
+    if (!canManageExpense(expenseId)) return;
     const e = currentExpenses.find((x) => x.expense_id === expenseId);
-    if (!e) return;
+    if (!e || e.status !== "active") return;
 
     $("editExpenseId").value = e.expense_id;
     $("editSpentOn").value = e.spent_on;
@@ -504,6 +560,7 @@
     $("editPayment").value = e.payment_type;
     $("editPayer").value = e.payer_id;
     const enteredBy = originalEnteredBy(e.expense_id);
+    $("editModalEyebrow").textContent = currentProfile.is_admin && enteredBy !== currentProfile.id ? "Admin Düzenleme" : "Kendi Kaydın";
     $("editAuditInfo").textContent = `İlk kaydı giren: ${profileName(enteredBy)} • Son revizyon: ${profileName(e.changed_by)}`;
     $("editCardTl").value = e.card_tl_amount || "";
     $("editReason").value = "";
@@ -526,7 +583,7 @@
 
   async function reviseExpense(e) {
     e.preventDefault();
-    if (!currentProfile?.is_admin) return;
+    if (!canManageExpense($("editExpenseId").value)) return;
     if (!navigator.onLine) {
       showMessage($("adminMessage"), "warning", "İnternet bağlantısı yok. Değişiklik kaydedilmedi.");
       return;
@@ -563,7 +620,7 @@
   }
 
   async function voidExpense() {
-    if (!currentProfile?.is_admin) return;
+    if (!canManageExpense($("editExpenseId").value)) return;
     if (!navigator.onLine) {
       showMessage($("adminMessage"), "warning", "İnternet bağlantısı yok. Kayıt iptal edilmedi.");
       return;
@@ -573,7 +630,7 @@
     try {
       const { error } = await client.rpc("void_expense", {
         p_expense_id: $("editExpenseId").value,
-        p_change_reason: $("editReason").value.trim() || "Admin tarafından iptal edildi"
+        p_change_reason: $("editReason").value.trim() || "Kayıt sahibi/admin tarafından iptal edildi"
       });
       if (error) throw error;
       await loadBaseData();
@@ -682,6 +739,7 @@
     document.querySelectorAll(".page").forEach((s) => s.classList.toggle("active", s.id === `page-${page}`));
     $("appScreen").classList.toggle("entry-mode", page === "add");
     if (page === "report") renderReport();
+    if (page === "mine") renderMyEntries();
     window.scrollTo({ top: 0, behavior: "instant" });
   }
 
@@ -704,6 +762,8 @@
     $("authForm").addEventListener("submit", handleAuthSubmit);
     $("expenseForm").addEventListener("submit", saveExpense);
     $("expensePayer").addEventListener("change", () => rememberPayer($("expensePayer").value));
+    $("expenseCurrency").addEventListener("change", () => rememberChoice("currency", $("expenseCurrency").value));
+    $("expensePayment").addEventListener("change", () => rememberChoice("payment", $("expensePayment").value));
     $("selectAllParticipants").addEventListener("click", () => document.querySelectorAll('input[data-scope="add"]').forEach((x) => x.checked = true));
 
     document.querySelectorAll(".nav-tab").forEach((t) => t.addEventListener("click", () => switchPage(t.dataset.page)));
@@ -713,6 +773,10 @@
     $("refreshReportBtn").addEventListener("click", async () => {
       try { await loadBaseData(); showToast("Rapor yenilendi."); }
       catch (_) { showToast("Rapor yenilenemedi."); }
+    });
+    $("refreshMineBtn").addEventListener("click", async () => {
+      try { await loadBaseData(); showToast("Kayıtların yenilendi."); }
+      catch (_) { showToast("Kayıtların yenilenemedi."); }
     });
 
     $("closeAdminModal").addEventListener("click", closeAdminModal);

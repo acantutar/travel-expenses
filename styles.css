@@ -182,3 +182,28 @@ input:focus,select:focus{border-color:var(--teal2);box-shadow:0 0 0 4px rgba(20,
   #appScreen.entry-mode .payer-field select{min-height:40px}
   #appScreen.entry-mode .save-button{min-height:46px}
 }
+
+/* v3.5 — Kayıtlarım + 4-tab mobile navigation */
+.mine-page{max-width:720px}
+.mine-intro{margin:-4px 0 14px;color:var(--muted);font-size:.86rem;line-height:1.45}
+.my-entry-list{display:grid;gap:10px}
+.my-entry-card{width:100%;border:1px solid var(--line);background:#fff;border-radius:18px;padding:14px;text-align:left;color:var(--text);box-shadow:0 5px 18px rgba(24,83,78,.05);display:grid;gap:9px}
+button.my-entry-card{cursor:pointer}
+button.my-entry-card:active{transform:scale(.995)}
+.my-entry-card.is-voided{opacity:.68;background:#f8faf9}
+.my-entry-top,.my-entry-bottom{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.my-entry-date{font-size:.75rem;color:var(--muted);font-weight:700}
+.my-entry-status{font-size:.69rem;font-weight:850;border-radius:999px;padding:5px 8px;background:#eaf8f5;color:var(--teal)}
+.my-entry-status.voided{background:#fff0ef;color:var(--danger)}
+.my-entry-detail{font-weight:850;font-size:1rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.my-entry-amount{font-weight:900;font-size:1rem;white-space:nowrap}
+.my-entry-meta{font-size:.76rem;color:var(--muted);line-height:1.35}
+.my-entry-action{color:var(--teal);font-size:.76rem;font-weight:850}
+
+@media(max-width:600px){
+  .bottom-nav{gap:3px;padding-left:7px;padding-right:7px}
+  .nav-tab{flex:1 1 0;width:auto;max-width:120px;padding-left:3px;padding-right:3px;font-size:.68rem;min-width:0}
+  .nav-tab span:last-child{white-space:nowrap}
+  .mine-page{padding-left:12px;padding-right:12px}
+  .my-entry-card{border-radius:16px;padding:12px}
+}

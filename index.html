@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <title>TripSplit</title>
-  <link rel="stylesheet" href="styles.css?v=3.4" />
+  <link rel="stylesheet" href="styles.css?v=3.5" />
 </head>
 <body>
   <div id="offlineBanner" class="offline-banner hidden">İnternet yok — yeni kayıt veya değişiklik kaydedilemez.</div>
@@ -115,6 +115,19 @@
         </form>
       </section>
 
+      <section id="page-mine" class="page mine-page">
+        <div class="page-heading">
+          <div>
+            <div class="eyebrow">Düzeltme & İptal</div>
+            <h2>Kayıtlarım</h2>
+          </div>
+          <button id="refreshMineBtn" class="icon-action" type="button" aria-label="Yenile">↻</button>
+        </div>
+        <p class="mine-intro">Sisteme senin girdiğin harcamalar. Aktif bir kayda dokunup düzeltebilir veya iptal edebilirsin. Eski sürüm hiçbir zaman silinmez.</p>
+        <div id="myEntriesList" class="my-entry-list"></div>
+        <div id="myEntriesEmpty" class="panel table-empty hidden">Henüz senin girdiğin bir harcama yok.</div>
+      </section>
+
       <section id="page-report" class="page report-page">
         <div class="page-heading">
           <div>
@@ -212,6 +225,7 @@
 
       <nav class="bottom-nav" aria-label="Ana menü">
         <button class="nav-tab active" data-page="add" type="button"><span class="nav-icon">＋</span><span>Harcama</span></button>
+        <button class="nav-tab" data-page="mine" type="button"><span class="nav-icon">↺</span><span>Kayıtlarım</span></button>
         <button class="nav-tab" data-page="report" type="button"><span class="nav-icon">▤</span><span>Rapor</span></button>
         <button class="nav-tab" data-page="account" type="button"><span class="nav-icon">●</span><span>Hesabım</span></button>
       </nav>
@@ -221,7 +235,7 @@
   <div id="adminModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
     <div class="modal">
       <div class="modal-head">
-        <div><div class="eyebrow">Admin</div><h2>Harcamayı Düzenle</h2><p class="muted small">Eski kayıt değişmez; yeni revizyon oluşur.</p><p id="editAuditInfo" class="audit-info"></p></div>
+        <div><div id="editModalEyebrow" class="eyebrow">Düzeltme</div><h2>Harcamayı Düzenle</h2><p class="muted small">Eski kayıt değişmez; yeni revizyon oluşur.</p><p id="editAuditInfo" class="audit-info"></p></div>
         <button id="closeAdminModal" class="icon-button" type="button">×</button>
       </div>
       <form id="adminEditForm" class="stack">
@@ -242,7 +256,7 @@
   <div id="toast" class="toast hidden"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="config.js?v=3.4"></script>
-  <script src="app.js?v=3.4"></script>
+  <script src="config.js?v=3.5"></script>
+  <script src="app.js?v=3.5"></script>
 </body>
 </html>
