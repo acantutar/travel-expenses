@@ -124,3 +124,61 @@ input:focus,select:focus{border-color:var(--teal2);box-shadow:0 0 0 4px rgba(20,
   #appScreen.entry-mode .participant-title-row{margin-bottom:5px}
   #appScreen.entry-mode .person-check span{min-height:34px}
 }
+
+
+/* v3.4 — payer below title, compact flow-save layout */
+@media(max-width:600px){
+  #appScreen.entry-mode #page-add{
+    padding-bottom:calc(var(--nav-h) + 12px + env(safe-area-inset-bottom));
+  }
+  #appScreen.entry-mode .entry-card{
+    gap:8px;
+  }
+  #appScreen.entry-mode .entry-title-row{
+    align-items:center;
+    margin-bottom:0;
+  }
+  #appScreen.entry-mode .entry-title-row h2{
+    padding-bottom:0;
+    font-size:1.14rem;
+  }
+  #appScreen.entry-mode .trip-dot{
+    margin:0;
+    align-self:center;
+  }
+  #appScreen.entry-mode .payer-field{
+    max-width:none;
+  }
+  #appScreen.entry-mode .payer-field select{
+    width:100%;
+    min-height:43px;
+    padding:8px 36px 8px 11px;
+    border-radius:12px;
+    font-size:16px;
+    font-weight:750;
+  }
+  #appScreen.entry-mode .entry-payer-line{display:none}
+
+  /* Kaydet artık katılımcı kutusunun hemen altında; gereksiz boşluk yok. */
+  #appScreen.entry-mode .save-button{
+    position:static;
+    z-index:auto;
+    left:auto;
+    right:auto;
+    bottom:auto;
+    width:100%;
+    min-height:50px;
+    margin:1px 0 0;
+    border-radius:15px;
+    box-shadow:0 8px 18px rgba(15,118,110,.20);
+  }
+  #appScreen.entry-mode #expenseMessage{
+    margin:0;
+  }
+}
+
+@media(max-width:600px) and (max-height:720px){
+  #appScreen.entry-mode .entry-card{gap:6px}
+  #appScreen.entry-mode .payer-field select{min-height:40px}
+  #appScreen.entry-mode .save-button{min-height:46px}
+}

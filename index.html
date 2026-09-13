@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <title>TripSplit</title>
-  <link rel="stylesheet" href="styles.css?v=3.3" />
+  <link rel="stylesheet" href="styles.css?v=3.4" />
 </head>
 <body>
   <div id="offlineBanner" class="offline-banner hidden">İnternet yok — yeni kayıt veya değişiklik kaydedilemez.</div>
@@ -58,15 +58,14 @@
       <section id="page-add" class="page active entry-page">
         <form id="expenseForm" class="entry-card">
           <div class="entry-title-row">
-            <div>
-              <h2>Yeni Harcama</h2>
-              <div class="entry-payer-line">
-                <span>Harcayan</span>
-                <select id="expensePayer" aria-label="Harcayan kişi"></select>
-              </div>
-            </div>
+            <h2>Yeni Harcama</h2>
             <div class="trip-dot">●</div>
           </div>
+
+          <label class="field payer-field">
+            <span>Harcayan</span>
+            <select id="expensePayer" aria-label="Harcayan kişi"></select>
+          </label>
 
           <label class="field">
             <span>Harcama Detayı</span>
@@ -243,7 +242,7 @@
   <div id="toast" class="toast hidden"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="config.js?v=3.3"></script>
-  <script src="app.js?v=3.3"></script>
+  <script src="config.js?v=3.4"></script>
+  <script src="app.js?v=3.4"></script>
 </body>
 </html>

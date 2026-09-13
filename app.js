@@ -83,6 +83,26 @@
     return allProfiles.find((p) => p.id === id)?.username || "Bilinmiyor";
   }
 
+  function lastPayerStorageKey() {
+    return currentProfile?.id ? `tripSplitLastPayer:${currentProfile.id}` : null;
+  }
+
+  function getRememberedPayer() {
+    try {
+      const key = lastPayerStorageKey();
+      return key ? localStorage.getItem(key) : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function rememberPayer(id) {
+    try {
+      const key = lastPayerStorageKey();
+      if (key && id) localStorage.setItem(key, id);
+    } catch (_) {}
+  }
+
   function originalEnteredBy(expenseId) {
     const first = allVersions.find((v) => v.expense_id === expenseId && Number(v.version_no) === 1);
     return first?.changed_by || null;
@@ -235,10 +255,11 @@
 
     const payerOptions = allProfiles.map((p) => `<option value="${p.id}">${escapeHtml(p.username)}</option>`).join("");
     const oldExpensePayer = $("expensePayer").value;
+    const rememberedPayer = getRememberedPayer();
+    const preferredPayer = [oldExpensePayer, rememberedPayer, currentProfile?.id, allProfiles[0]?.id]
+      .find((id) => id && allProfiles.some((p) => p.id === id)) || "";
     $("expensePayer").innerHTML = payerOptions;
-    $("expensePayer").value = oldExpensePayer && allProfiles.some((p) => p.id === oldExpensePayer)
-      ? oldExpensePayer
-      : (currentProfile?.id || allProfiles[0]?.id || "");
+    $("expensePayer").value = preferredPayer;
     $("editPayer").innerHTML = payerOptions;
     $("adminPasswordUser").innerHTML = payerOptions;
   }
@@ -286,6 +307,7 @@
     try {
       const payerId = $("expensePayer").value;
       if (!payerId || !allProfiles.some((p) => p.id === payerId)) throw new Error("Harcayan kişiyi seç.");
+      rememberPayer(payerId);
 
       const { error } = await client.rpc("create_expense", {
         p_payer_id: payerId,
@@ -302,7 +324,7 @@
       $("expenseDetail").value = "";
       $("expenseAmount").value = "";
       $("expenseDate").value = localToday();
-      $("expensePayer").value = currentProfile?.id || $("expensePayer").value;
+      $("expensePayer").value = payerId;
       renderParticipantPickers();
       showMessage($("expenseMessage"), "success", "✓ Harcama kaydedildi.");
     } catch (err) {
@@ -681,6 +703,7 @@
 
     $("authForm").addEventListener("submit", handleAuthSubmit);
     $("expenseForm").addEventListener("submit", saveExpense);
+    $("expensePayer").addEventListener("change", () => rememberPayer($("expensePayer").value));
     $("selectAllParticipants").addEventListener("click", () => document.querySelectorAll('input[data-scope="add"]').forEach((x) => x.checked = true));
 
     document.querySelectorAll(".nav-tab").forEach((t) => t.addEventListener("click", () => switchPage(t.dataset.page)));
