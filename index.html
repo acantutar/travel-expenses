@@ -60,7 +60,10 @@
           <div class="entry-title-row">
             <div>
               <h2>Yeni Harcama</h2>
-              <p id="payerHint">Harcayan: —</p>
+              <div class="entry-payer-line">
+                <span>Harcayan</span>
+                <select id="expensePayer" aria-label="Harcayan kişi"></select>
+              </div>
             </div>
             <div class="trip-dot">●</div>
           </div>
@@ -219,7 +222,7 @@
   <div id="adminModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
     <div class="modal">
       <div class="modal-head">
-        <div><div class="eyebrow">Admin</div><h2>Harcamayı Düzenle</h2><p class="muted small">Eski kayıt değişmez; yeni revizyon oluşur.</p></div>
+        <div><div class="eyebrow">Admin</div><h2>Harcamayı Düzenle</h2><p class="muted small">Eski kayıt değişmez; yeni revizyon oluşur.</p><p id="editAuditInfo" class="audit-info"></p></div>
         <button id="closeAdminModal" class="icon-button" type="button">×</button>
       </div>
       <form id="adminEditForm" class="stack">

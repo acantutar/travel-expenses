@@ -83,6 +83,11 @@
     return allProfiles.find((p) => p.id === id)?.username || "Bilinmiyor";
   }
 
+  function originalEnteredBy(expenseId) {
+    const first = allVersions.find((v) => v.expense_id === expenseId && Number(v.version_no) === 1);
+    return first?.changed_by || null;
+  }
+
   function isNetworkLikeError(e) {
     const m = String(e?.message || e || "").toLowerCase();
     return !navigator.onLine || m.includes("fetch") || m.includes("network") || m.includes("failed to fetch");
@@ -99,7 +104,7 @@
 
   function persistLocalMirror() {
     try {
-      localStorage.setItem("tripSplitMirrorV3", JSON.stringify({
+      localStorage.setItem("tripSplitMirrorV32", JSON.stringify({
         saved_at: new Date().toISOString(),
         profiles: allProfiles,
         expense_versions: allVersions
@@ -175,13 +180,12 @@
 
     if (error || !data) {
       setScreen("auth");
-      showMessage($("authMessage"), "error", "Profil bulunamadı. v3 schema.sql dosyasını Supabase'te çalıştır.");
+      showMessage($("authMessage"), "error", "Profil bulunamadı. v3.2 schema.sql dosyasını Supabase'te çalıştır.");
       return;
     }
 
     currentProfile = data;
     $("userChip").textContent = data.username;
-    $("payerHint").textContent = `Harcayan: ${data.username}`;
     $("accountUsername").textContent = data.username;
     $("accountRole").textContent = data.is_admin ? "Admin" : "Kullanıcı";
     $("adminAccountPanel").classList.toggle("hidden", !data.is_admin);
@@ -229,8 +233,14 @@
       $(id).value = old;
     });
 
-    $("editPayer").innerHTML = allProfiles.map((p) => `<option value="${p.id}">${escapeHtml(p.username)}</option>`).join("");
-    $("adminPasswordUser").innerHTML = allProfiles.map((p) => `<option value="${p.id}">${escapeHtml(p.username)}</option>`).join("");
+    const payerOptions = allProfiles.map((p) => `<option value="${p.id}">${escapeHtml(p.username)}</option>`).join("");
+    const oldExpensePayer = $("expensePayer").value;
+    $("expensePayer").innerHTML = payerOptions;
+    $("expensePayer").value = oldExpensePayer && allProfiles.some((p) => p.id === oldExpensePayer)
+      ? oldExpensePayer
+      : (currentProfile?.id || allProfiles[0]?.id || "");
+    $("editPayer").innerHTML = payerOptions;
+    $("adminPasswordUser").innerHTML = payerOptions;
   }
 
   function participantCheckboxHtml(p, scope, checked = true) {
@@ -274,7 +284,11 @@
     btn.textContent = "Kaydediliyor…";
 
     try {
+      const payerId = $("expensePayer").value;
+      if (!payerId || !allProfiles.some((p) => p.id === payerId)) throw new Error("Harcayan kişiyi seç.");
+
       const { error } = await client.rpc("create_expense", {
+        p_payer_id: payerId,
         p_description: description,
         p_amount: amount,
         p_currency: $("expenseCurrency").value,
@@ -288,6 +302,7 @@
       $("expenseDetail").value = "";
       $("expenseAmount").value = "";
       $("expenseDate").value = localToday();
+      $("expensePayer").value = currentProfile?.id || $("expensePayer").value;
       renderParticipantPickers();
       showMessage($("expenseMessage"), "success", "✓ Harcama kaydedildi.");
     } catch (err) {
@@ -343,7 +358,7 @@
         <td class="number">${formatAmount(e.amount, e.currency)}</td>
         <td>${e.currency}</td>
         <td>${escapeHtml(e.payment_type)}</td>
-        <td>${escapeHtml(profileName(e.payer_id))}</td>
+        <td>${escapeHtml(profileName(e.payer_id))}${currentProfile.is_admin ? `<span class="subtext">Giren: ${escapeHtml(profileName(originalEnteredBy(e.expense_id)))}</span>` : ""}</td>
         <td><div class="pill-list">${people}</div></td>
         <td>${tl}</td>
       </tr>`;
@@ -466,6 +481,8 @@
     $("editCurrency").value = e.currency;
     $("editPayment").value = e.payment_type;
     $("editPayer").value = e.payer_id;
+    const enteredBy = originalEnteredBy(e.expense_id);
+    $("editAuditInfo").textContent = `İlk kaydı giren: ${profileName(enteredBy)} • Son revizyon: ${profileName(e.changed_by)}`;
     $("editCardTl").value = e.card_tl_amount || "";
     $("editReason").value = "";
     $("editParticipantPicker").innerHTML = allProfiles.map((p) => participantCheckboxHtml(p, "edit", e.participant_ids.includes(p.id))).join("");
@@ -619,7 +636,7 @@
   function exportCsv() {
     if (!currentProfile?.is_admin) return;
     const rows = activeExpenses();
-    const head = ["Harcama Tarihi", "Harcama Detay", "Harcama Tutar", "Harcama Para Birimi", "Harcama Kart/Cash", "Harcayan Kişi", "Borca Ortak Olanlar", "Kart TL Karşılığı"];
+    const head = ["Harcama Tarihi", "Harcama Detay", "Harcama Tutar", "Harcama Para Birimi", "Harcama Kart/Cash", "Harcayan Kişi", "Kaydı Giren", "Borca Ortak Olanlar", "Kart TL Karşılığı"];
     const lines = [
       head.map(csvCell).join(","),
       ...rows.map((e) => [
@@ -629,6 +646,7 @@
         e.currency,
         e.payment_type,
         profileName(e.payer_id),
+        profileName(originalEnteredBy(e.expense_id)),
         e.participant_ids.map(profileName).join(" | "),
         e.card_tl_amount || ""
       ].map(csvCell).join(","))
