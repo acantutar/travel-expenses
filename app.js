@@ -640,6 +640,7 @@
   function switchPage(page) {
     document.querySelectorAll(".nav-tab").forEach((t) => t.classList.toggle("active", t.dataset.page === page));
     document.querySelectorAll(".page").forEach((s) => s.classList.toggle("active", s.id === `page-${page}`));
+    $("appScreen").classList.toggle("entry-mode", page === "add");
     if (page === "report") renderReport();
     window.scrollTo({ top: 0, behavior: "instant" });
   }
