@@ -1,29 +1,15 @@
-# Travel Expenses v2
+# TripSplit
 
-Küçük gezi masraf paylaşım uygulaması. Düz HTML/CSS/JS + Supabase; build gerektirmez.
+Vietnam & Malezya gezisi için 4 kişilik ortak harcama ve borç paylaşım uygulaması.
 
-## Özellikler
-- Kullanıcı adı + şifre ile giriş
-- Harcayan kişi otomatik giriş yapan kullanıcı
+- Mobile-first harcama girişi
+- Geçmiş tarihli harcama girişi
 - MYR / VND / USD / TL
 - Kart / Cash
-- Borca ortak kişiler: varsayılan herkes seçili, istenmeyen kişi çıkarılabilir
-- Rapor: harcamalar + etkilenmiş kişiler + kişi bazlı toplamlar
-- Borç tablosu: kim kime ne kadar borçlu
-- Kart harcamalarına sonradan kesin TL karşılığı girme
-- Immutable ledger: eski harcama kayıtları UPDATE/DELETE edilmez
-- Admin düzeltmeleri yeni revizyon olarak eklenir
-- Admin iptalinde veri silinmez; voided revizyon eklenir
-- Admin tam JSON yedek ve CSV dışa aktarım
-- DB'den başarılı cevap gelmeden “kaydedildi” mesajı gösterilmez
+- Harcamaya ortak kişileri seçme
+- Kişi toplamları ve net borç hesabı
+- Kart harcamalarına daha sonra kesin TL tutarı ekleme
+- Append-only harcama revizyon geçmişi
+- Admin tarih filtresi, düzenleme, iptal, yedek ve şifre değiştirme
 
-## Kurulum
-1. Supabase SQL Editor'de `schema.sql` dosyasının tamamını çalıştır.
-2. Authentication > Providers > Email altında Confirm email kapalı olsun.
-3. Siteyi açıp `act` hesabını oluştur.
-4. SQL Editor'de:
-   `update public.profiles set is_admin = true where username = 'act';`
-5. Dosyaları GitHub repo root'una yükle ve GitHub Pages'i `main / (root)` üzerinden aç.
-
-## Önemli
-Supabase Free plan otomatik database backup sunmuyor. Uygulamadaki “Tam Yedek (JSON) İndir” düğmesi tüm sürüm geçmişini dışa aktarır. Ek olarak periyodik `supabase db dump` / `pg_dump` ile ayrı bir yedek alınması önerilir.
+Kurulum için `SETUP.md` dosyasına bak.

@@ -2,161 +2,243 @@
 <html lang="tr">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#101827" />
-  <title>Travel Expenses</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f766e" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <title>TripSplit</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div id="offlineBanner" class="offline-banner hidden">İnternet bağlantısı yok. Yeni kayıt veya değişiklik kaydedilemez.</div>
+  <div id="offlineBanner" class="offline-banner hidden">İnternet yok — yeni kayıt veya değişiklik kaydedilemez.</div>
 
-  <main class="shell">
-    <section id="setupScreen" class="screen hidden">
+  <main class="app-shell">
+    <section id="setupScreen" class="screen hidden center-screen">
       <div class="auth-card">
-        <div class="brand-mark">₺</div>
-        <h1>Travel Expenses</h1>
-        <p class="muted">Supabase bağlantısı henüz ayarlanmamış.</p>
+        <div class="brand-icon">✈️</div>
+        <h1>TripSplit</h1>
+        <p class="muted">Supabase bağlantısı ayarlanmamış.</p>
       </div>
     </section>
 
-    <section id="authScreen" class="screen hidden">
-      <div class="auth-card">
-        <div class="brand-mark">₺</div>
-        <h1>Travel Expenses</h1>
-        <p class="muted">Ortak seyahat harcama takibi</p>
-        <div class="segmented">
-          <button id="loginTab" class="segment active" type="button">Giriş Yap</button>
-          <button id="signupTab" class="segment" type="button">Hesap Oluştur</button>
-        </div>
-        <form id="authForm" class="stack">
-          <label><span>Kullanıcı adı</span><input id="username" autocomplete="username" maxlength="30" placeholder="örn. sena" required /></label>
-          <label><span>Şifre</span><input id="password" type="password" autocomplete="current-password" minlength="6" placeholder="En az 6 karakter" required /></label>
-          <label id="confirmPasswordWrap" class="hidden"><span>Şifre tekrar</span><input id="confirmPassword" type="password" minlength="6" placeholder="Şifreyi tekrar yaz" /></label>
-          <button id="authSubmit" class="primary" type="submit">Giriş Yap</button>
+    <section id="authScreen" class="screen hidden center-screen travel-bg">
+      <div class="auth-card login-card">
+        <div class="brand-icon">🌴</div>
+        <h1>TripSplit</h1>
+        <p class="muted">Vietnam & Malezya gezi harcamaları</p>
+        <form id="authForm" class="stack login-form">
+          <label>
+            <span>Kullanıcı</span>
+            <select id="loginUser" autocomplete="username" required>
+              <option value="act">ACT</option>
+              <option value="busra">Büşra</option>
+              <option value="fatma">Fatma</option>
+              <option value="sena">Sena</option>
+            </select>
+          </label>
+          <label>
+            <span>Şifre</span>
+            <input id="password" type="password" autocomplete="current-password" minlength="6" placeholder="Şifren" required />
+          </label>
+          <button id="authSubmit" class="primary big-button" type="submit">Giriş Yap</button>
         </form>
         <div id="authMessage" class="message hidden"></div>
       </div>
     </section>
 
     <section id="appScreen" class="screen hidden">
-      <header class="topbar">
-        <div><div class="eyebrow">Travel Expenses</div><div id="welcomeText" class="welcome"></div></div>
-        <button id="logoutBtn" class="ghost" type="button">Çıkış</button>
+      <header class="mobile-header">
+        <div>
+          <div class="eyebrow">Vietnam • Malaysia</div>
+          <div class="brand-line"><span>TripSplit</span><span class="brand-emoji">✈️</span></div>
+        </div>
+        <div id="userChip" class="user-chip"></div>
       </header>
 
-      <nav class="tabs">
-        <button class="nav-tab active" data-page="add" type="button">Harcama Ekle</button>
-        <button class="nav-tab" data-page="report" type="button">Rapor</button>
-        <button class="nav-tab" data-page="account" type="button">Hesabım</button>
-      </nav>
-
-      <section id="page-add" class="page active">
-        <div class="panel form-panel">
-          <div class="panel-heading">
-            <div><h2>Harcama Ekle</h2><p>Harcayan kişi otomatik olarak giriş yapan kullanıcıdır.</p></div>
+      <section id="page-add" class="page active entry-page">
+        <form id="expenseForm" class="entry-card">
+          <div class="entry-title-row">
+            <div>
+              <h2>Yeni Harcama</h2>
+              <p id="payerHint">Harcayan: —</p>
+            </div>
+            <div class="trip-dot">●</div>
           </div>
-          <form id="expenseForm" class="expense-form">
-            <label class="wide"><span>Harcama Detayı</span><input id="expenseDetail" maxlength="150" placeholder="örn. Grab - Havalimanı" required /></label>
-            <label><span>Harcama Tutarı</span><input id="expenseAmount" type="number" inputmode="decimal" min="0.01" step="0.01" placeholder="0.00" required /></label>
-            <label><span>Para Birimi</span><select id="expenseCurrency" required><option>MYR</option><option>VND</option><option>USD</option><option>TL</option></select></label>
-            <label><span>Harcama Kart/Cash</span><select id="expensePayment" required><option>Kart</option><option>Cash</option></select></label>
-            <fieldset class="wide participant-fieldset">
-              <legend>Borca Ortak Olanlar</legend>
-              <div class="participant-head"><span>Varsayılan olarak herkes seçilir.</span><button id="selectAllParticipants" class="link-button" type="button">Tümünü seç</button></div>
-              <div id="participantPicker" class="participant-picker"></div>
-            </fieldset>
-            <button id="saveExpenseBtn" class="primary save-button" type="submit">Harcamayı Kaydet</button>
-          </form>
-          <div id="expenseMessage" class="message hidden"></div>
-        </div>
 
-        <div class="panel recent-panel">
-          <div class="panel-heading compact"><div><h2>Son Harcamalarım</h2><p>Son 5 aktif kayıt</p></div></div>
-          <div id="recentExpenses" class="recent-list empty-state">Henüz kayıt yok.</div>
-        </div>
+          <label class="field">
+            <span>Harcama Detayı</span>
+            <input id="expenseDetail" maxlength="150" placeholder="Örn. Grab - Havalimanı" enterkeyhint="next" required />
+          </label>
+
+          <div class="two-col amount-row">
+            <label class="field grow-2">
+              <span>Tutar</span>
+              <input id="expenseAmount" type="number" inputmode="decimal" min="0.01" step="0.01" placeholder="0.00" required />
+            </label>
+            <label class="field grow-1">
+              <span>Para</span>
+              <select id="expenseCurrency" required>
+                <option>MYR</option>
+                <option>VND</option>
+                <option>USD</option>
+                <option>TL</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="two-col">
+            <label class="field">
+              <span>Ödeme</span>
+              <select id="expensePayment" required>
+                <option>Kart</option>
+                <option>Cash</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Harcama Tarihi</span>
+              <input id="expenseDate" type="date" required />
+            </label>
+          </div>
+
+          <fieldset class="participant-fieldset">
+            <div class="participant-title-row">
+              <legend>Borca Ortak Olanlar</legend>
+              <button id="selectAllParticipants" class="mini-link" type="button">Hepsi</button>
+            </div>
+            <div id="participantPicker" class="participant-picker"></div>
+          </fieldset>
+
+          <button id="saveExpenseBtn" class="primary save-button" type="submit">Harcamayı Kaydet</button>
+          <div id="expenseMessage" class="message hidden"></div>
+        </form>
       </section>
 
-      <section id="page-report" class="page">
-        <div class="panel">
-          <div class="panel-heading report-title-row">
-            <div><h2>Rapor</h2><p>Filtreler harcama tablosuna ve toplam kartlarına uygulanır.</p></div>
-            <button id="refreshReportBtn" class="ghost" type="button">Yenile</button>
+      <section id="page-report" class="page report-page">
+        <div class="page-heading">
+          <div>
+            <div class="eyebrow">Ortak Hesap</div>
+            <h2>Rapor</h2>
           </div>
-          <div class="filters">
+          <button id="refreshReportBtn" class="icon-action" type="button" aria-label="Yenile">↻</button>
+        </div>
+
+        <div class="panel filters-panel">
+          <div id="adminDateFilters" class="admin-date-filters hidden">
             <label><span>Başlangıç</span><input id="filterStart" type="date" /></label>
             <label><span>Bitiş</span><input id="filterEnd" type="date" /></label>
-            <label><span>Harcayan Kişi</span><select id="filterUser"><option value="">Tümü</option></select></label>
-            <label><span>Borca Ortak</span><select id="filterParticipant"><option value="">Tümü</option></select></label>
-            <label><span>Para Birimi</span><select id="filterCurrency"><option value="">Tümü</option><option>MYR</option><option>VND</option><option>USD</option><option>TL</option></select></label>
-            <label><span>Ödeme</span><select id="filterPayment"><option value="">Tümü</option><option>Kart</option><option>Cash</option></select></label>
-            <button id="clearFiltersBtn" class="secondary filter-button" type="button">Filtreleri Temizle</button>
           </div>
+          <div class="filters-grid">
+            <label><span>Harcayan</span><select id="filterUser"><option value="">Tümü</option></select></label>
+            <label><span>Borca Ortak</span><select id="filterParticipant"><option value="">Tümü</option></select></label>
+            <label><span>Para</span><select id="filterCurrency"><option value="">Tümü</option><option>MYR</option><option>VND</option><option>USD</option><option>TL</option></select></label>
+            <label><span>Ödeme</span><select id="filterPayment"><option value="">Tümü</option><option>Kart</option><option>Cash</option></select></label>
+          </div>
+          <button id="clearFiltersBtn" class="secondary full-button" type="button">Filtreleri Temizle</button>
         </div>
 
         <div class="panel">
-          <div class="panel-heading compact"><div><h2>Kim Ne Kadar Ödedi?</h2><p>İlk tutar üzerinden, para birimleri ayrı gösterilir.</p></div></div>
+          <div class="section-title"><h3>Kim Ne Kadar Ödedi?</h3></div>
           <div id="totalsGrid" class="totals-grid empty-state">Rapor yükleniyor…</div>
         </div>
 
         <div class="panel table-panel">
-          <div class="panel-heading compact"><div><h2>Harcama Detayları</h2><p>İptal edilen kayıtlar bu tabloda gösterilmez.</p></div></div>
+          <div class="section-title">
+            <div><h3>Harcama Detayları</h3><p>Admin satıra dokunarak düzenleyebilir.</p></div>
+            <span id="recordCount" class="count-pill">0 kayıt</span>
+          </div>
           <div class="table-wrap">
             <table>
-              <thead><tr>
-                <th>Harcama Detay</th><th class="number">Harcama Tutar</th><th>Harcama Para Birimi</th><th>Harcama Kart/Cash</th><th>Harcayan Kişi</th><th>Borca Ortak Olanlar</th><th>Kart TL Karşılığı</th>
-              </tr></thead>
+              <thead>
+                <tr>
+                  <th>Harcama Tarihi</th>
+                  <th>Harcama Detay</th>
+                  <th class="number">Harcama Tutar</th>
+                  <th>Harcama Para Birimi</th>
+                  <th>Harcama Kart/Cash</th>
+                  <th>Harcayan Kişi</th>
+                  <th>Borca Ortak Olanlar</th>
+                  <th>Kart TL Karşılığı</th>
+                </tr>
+              </thead>
               <tbody id="reportBody"></tbody>
             </table>
-            <div id="reportEmpty" class="table-empty hidden">Bu filtrelere uygun harcama bulunamadı.</div>
+            <div id="reportEmpty" class="table-empty hidden">Bu filtrelere uygun harcama yok.</div>
           </div>
-          <div class="table-footer"><span id="recordCount">0 kayıt</span><span id="adminHint" class="hidden">Admin: düzenlemek için bir satıra tıkla.</span></div>
         </div>
 
         <div class="panel table-panel">
-          <div class="panel-heading compact"><div><h2>Kim Kime Ne Kadar Borçlu?</h2><p>Kartın kesin TL karşılığı girildiyse TL kullanılır; girilmediyse borç geçici olarak orijinal para biriminde görünür.</p></div></div>
+          <div class="section-title"><div><h3>Kim Kime Ne Kadar Borçlu?</h3><p>Kart TL tutarı kesinleştiyse hesap TL üzerinden yapılır.</p></div></div>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Borçlu</th><th>Alacaklı</th><th class="number">Tutar</th><th>Para Birimi</th><th>Durum</th></tr></thead>
+              <thead><tr><th>Borçlu</th><th>Alacaklı</th><th class="number">Tutar</th><th>Para</th><th>Durum</th></tr></thead>
               <tbody id="debtBody"></tbody>
             </table>
-            <div id="debtEmpty" class="table-empty hidden">Hesaplanmış borç bulunmuyor.</div>
+            <div id="debtEmpty" class="table-empty hidden">Hesaplanmış borç yok.</div>
           </div>
         </div>
       </section>
 
-      <section id="page-account" class="page">
+      <section id="page-account" class="page account-page">
+        <div class="page-heading">
+          <div><div class="eyebrow">Profil</div><h2>Hesabım</h2></div>
+        </div>
+
         <div class="panel account-panel">
-          <h2>Hesabım</h2>
-          <dl class="account-grid"><div><dt>Kullanıcı</dt><dd id="accountUsername">-</dd></div><div><dt>Yetki</dt><dd id="accountRole">-</dd></div></dl>
-          <div class="account-actions">
-            <button id="backupJsonBtn" class="secondary hidden" type="button">Tam Yedek (JSON) İndir</button>
-            <button id="exportCsvBtn" class="secondary hidden" type="button">Aktif Harcamaları CSV İndir</button>
-            <button id="accountLogoutBtn" class="secondary" type="button">Çıkış Yap</button>
+          <dl class="account-grid">
+            <div><dt>Kullanıcı</dt><dd id="accountUsername">-</dd></div>
+            <div><dt>Yetki</dt><dd id="accountRole">-</dd></div>
+          </dl>
+          <button id="accountLogoutBtn" class="secondary full-button" type="button">Çıkış Yap</button>
+        </div>
+
+        <div id="adminAccountPanel" class="panel hidden">
+          <div class="section-title"><div><h3>Admin İşlemleri</h3><p>Diğer kullanıcıların şifrelerini değiştirebilirsin.</p></div></div>
+          <form id="passwordAdminForm" class="stack">
+            <label><span>Kullanıcı</span><select id="adminPasswordUser"></select></label>
+            <label><span>Yeni Şifre</span><input id="adminNewPassword" type="password" minlength="8" autocomplete="new-password" required /></label>
+            <label><span>Yeni Şifre Tekrar</span><input id="adminNewPasswordConfirm" type="password" minlength="8" autocomplete="new-password" required /></label>
+            <button id="adminPasswordBtn" class="primary" type="submit">Şifreyi Değiştir</button>
+          </form>
+          <div id="passwordMessage" class="message hidden"></div>
+          <div class="admin-tools">
+            <button id="backupJsonBtn" class="secondary" type="button">Tam Yedek (JSON)</button>
+            <button id="exportCsvBtn" class="secondary" type="button">CSV İndir</button>
           </div>
-          <div id="backupNote" class="backup-note hidden">Tam yedek, tüm eski revizyonları ve iptal kayıtlarını da içerir.</div>
+          <p class="backup-note">Tam yedek; eski revizyonları ve iptal edilmiş kayıtları da içerir.</p>
         </div>
       </section>
+
+      <nav class="bottom-nav" aria-label="Ana menü">
+        <button class="nav-tab active" data-page="add" type="button"><span class="nav-icon">＋</span><span>Harcama</span></button>
+        <button class="nav-tab" data-page="report" type="button"><span class="nav-icon">▤</span><span>Rapor</span></button>
+        <button class="nav-tab" data-page="account" type="button"><span class="nav-icon">●</span><span>Hesabım</span></button>
+      </nav>
     </section>
   </main>
 
   <div id="adminModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
-    <div class="modal wide-modal">
-      <div class="modal-head"><div><div class="eyebrow">Admin</div><h2>Harcamayı Düzenle</h2><p class="muted small">Eski kayıt değişmez. Kaydettiğinde yeni bir revizyon oluşur.</p></div><button id="closeAdminModal" class="icon-button" type="button">×</button></div>
+    <div class="modal">
+      <div class="modal-head">
+        <div><div class="eyebrow">Admin</div><h2>Harcamayı Düzenle</h2><p class="muted small">Eski kayıt değişmez; yeni revizyon oluşur.</p></div>
+        <button id="closeAdminModal" class="icon-button" type="button">×</button>
+      </div>
       <form id="adminEditForm" class="stack">
         <input id="editExpenseId" type="hidden" />
+        <label><span>Harcama Tarihi</span><input id="editSpentOn" type="date" required /></label>
         <label><span>Harcama Detayı</span><input id="editDetail" required maxlength="150" /></label>
-        <div class="modal-row"><label><span>Tutar</span><input id="editAmount" type="number" min="0.01" step="0.01" required /></label><label><span>Para Birimi</span><select id="editCurrency"><option>MYR</option><option>VND</option><option>USD</option><option>TL</option></select></label></div>
-        <div class="modal-row"><label><span>Ödeme</span><select id="editPayment"><option>Kart</option><option>Cash</option></select></label><label><span>Harcayan Kişi</span><select id="editPayer"></select></label></div>
-        <label id="editTlWrap"><span>Kartın Kesin TL Karşılığı <small>(banka ekstresi geldikten sonra)</small></span><input id="editCardTl" type="number" min="0.01" step="0.01" placeholder="Boş bırakılabilir" /></label>
+        <div class="two-col"><label><span>Tutar</span><input id="editAmount" type="number" min="0.01" step="0.01" required /></label><label><span>Para</span><select id="editCurrency"><option>MYR</option><option>VND</option><option>USD</option><option>TL</option></select></label></div>
+        <div class="two-col"><label><span>Ödeme</span><select id="editPayment"><option>Kart</option><option>Cash</option></select></label><label><span>Harcayan</span><select id="editPayer"></select></label></div>
+        <label id="editTlWrap"><span>Kartın Kesin TL Karşılığı</span><input id="editCardTl" type="number" min="0.01" step="0.01" placeholder="Banka ekstresi geldikten sonra" /></label>
         <fieldset class="participant-fieldset"><legend>Borca Ortak Olanlar</legend><div id="editParticipantPicker" class="participant-picker"></div></fieldset>
-        <label><span>Değişiklik notu <small>(isteğe bağlı)</small></span><input id="editReason" maxlength="200" placeholder="örn. Banka TL tutarı eklendi" /></label>
+        <label><span>Değişiklik Notu</span><input id="editReason" maxlength="200" placeholder="Örn. Banka TL tutarı eklendi" /></label>
         <div class="modal-actions"><button id="voidExpenseBtn" class="danger" type="button">Kaydı İptal Et</button><button class="primary" type="submit">Yeni Revizyonu Kaydet</button></div>
       </form>
       <div id="adminMessage" class="message hidden"></div>
     </div>
   </div>
 
-  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+  <div id="toast" class="toast hidden"></div>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
   <script src="app.js"></script>
