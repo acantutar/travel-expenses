@@ -327,3 +327,13 @@ button.my-entry-card:active{transform:scale(.995)}
   .debt-table th:nth-child(4),.debt-table td:nth-child(4),
   .debt-table th:nth-child(5),.debt-table td:nth-child(5){text-align:center}
 }
+
+
+/* v3.10 — kişi bazında toplam yaklaşık harcama */
+.spend-approx-total{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  margin-top:10px;padding-top:9px;border-top:1px dashed #d9e8e5;font-size:.78rem
+}
+.spend-approx-total span{color:#49666b;font-weight:750}
+.spend-approx-total strong{color:var(--teal);font-size:.9rem;white-space:nowrap}
+.spend-approx-missing{margin-top:5px;color:#9a6b12;font-size:.68rem;line-height:1.3}

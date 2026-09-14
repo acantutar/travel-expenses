@@ -483,10 +483,27 @@
 
   function renderSpendTotals(rows) {
     const map = new Map();
-    allProfiles.forEach((p) => map.set(p.id, { MYR: 0, VND: 0, USD: 0, TL: 0 }));
+    const approxMap = new Map();
+
+    allProfiles.forEach((p) => {
+      map.set(p.id, { MYR: 0, VND: 0, USD: 0, TL: 0 });
+      approxMap.set(p.id, { minor: 0, missing: new Set() });
+    });
+
     rows.forEach((e) => {
       if (!map.has(e.payer_id)) map.set(e.payer_id, { MYR: 0, VND: 0, USD: 0, TL: 0 });
+      if (!approxMap.has(e.payer_id)) approxMap.set(e.payer_id, { minor: 0, missing: new Set() });
+
       map.get(e.payer_id)[e.currency] += Number(e.amount);
+
+      const approx = approxMap.get(e.payer_id);
+      const rate = rateFor(e.currency);
+      if (!rate) {
+        approx.missing.add(e.currency);
+      } else {
+        // Gezi yaklaşık toplamındakiyle aynı mantık: her harcama adminin genel kuru ile TL'ye çevrilir.
+        approx.minor += toMinor(Number(e.amount) * rate, "TL");
+      }
     });
 
     const used = [...map.entries()].filter(([, totals]) => CURRENCIES.some((c) => totals[c] !== 0));
@@ -498,11 +515,22 @@
     }
 
     grid.className = "totals-grid";
-    grid.innerHTML = used.map(([id, totals]) => `
-      <div class="total-card spend-total-card">
+    grid.innerHTML = used.map(([id, totals]) => {
+      const approx = approxMap.get(id) || { minor: 0, missing: new Set() };
+      const missingNote = approx.missing.size
+        ? `<div class="spend-approx-missing">Eksik kur: ${escapeHtml([...approx.missing].join(", "))}</div>`
+        : "";
+
+      return `<div class="total-card spend-total-card">
         <div class="total-user">${escapeHtml(profileName(id))}</div>
         ${CURRENCIES.map((c) => `<div class="total-line"><span>${c}</span><strong>${formatAmount(totals[c], c)}</strong></div>`).join("")}
-      </div>`).join("");
+        <div class="spend-approx-total">
+          <span>Toplam Yaklaşık Harcama</span>
+          <strong>${formatApproxTl(fromMinor(approx.minor, "TL"))}</strong>
+        </div>
+        ${missingNote}
+      </div>`;
+    }).join("");
   }
 
   function rateFor(currency) {
