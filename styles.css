@@ -247,3 +247,12 @@ button.my-entry-card:active{transform:scale(.995)}
   .rate-save-button{grid-column:auto}
   .approx-debt-card{min-height:0}
 }
+
+/* v3.7 — Harcama toplamları geri geldi + detay tablosu 5 kayıtla başlar */
+.spend-total-card{background:linear-gradient(145deg,#fff,#f7fbfa)}
+.report-toggle-button{margin-top:12px}
+.report-details-title{align-items:flex-start}
+@media(max-width:600px){
+  .report-toggle-button{position:sticky;left:0;width:100%;min-height:44px;margin-top:10px}
+  .report-details-title p{line-height:1.35}
+}

@@ -24,6 +24,7 @@
   let displayRateRows = [];
   let displayRates = { MYR: null, VND: null, USD: null, TL: 1 };
   let toastTimer = null;
+  let reportDetailsExpanded = false;
 
   function setScreen(name) {
     ["setup", "auth", "app"].forEach((n) => $(n + "Screen").classList.toggle("hidden", n !== name));
@@ -434,10 +435,25 @@
   function renderReport() {
     if (!currentProfile) return;
     const rows = filteredExpenses();
+    const visibleRows = reportDetailsExpanded ? rows : rows.slice(0, 5);
+
     $("recordCount").textContent = `${rows.length} kayıt`;
     $("reportEmpty").classList.toggle("hidden", rows.length > 0);
 
-    $("reportBody").innerHTML = rows.map((e) => {
+    const toggleBtn = $("toggleReportDetailsBtn");
+    const limitNote = $("reportLimitNote");
+    if (rows.length > 5) {
+      toggleBtn.classList.remove("hidden");
+      toggleBtn.textContent = reportDetailsExpanded ? "Daralt — İlk 5 Kaydı Göster" : `Tümünü Göster (${rows.length} kayıt)`;
+      limitNote.textContent = reportDetailsExpanded
+        ? `Tüm ${rows.length} kayıt gösteriliyor.`
+        : `Son 5 kayıt gösteriliyor. Toplam ${rows.length} kayıt var.`;
+    } else {
+      toggleBtn.classList.add("hidden");
+      limitNote.textContent = rows.length ? `${rows.length} kayıt gösteriliyor.` : "Henüz harcama kaydı yok.";
+    }
+
+    $("reportBody").innerHTML = visibleRows.map((e) => {
       const people = e.participant_ids.map((id) => `<span class="pill">${escapeHtml(profileName(id))}</span>`).join("");
       const tl = e.payment_type === "Kart" && e.currency !== "TL"
         ? (e.card_tl_amount ? `${formatAmount(e.card_tl_amount, "TL")} TL` : '<span class="status-provisional">Bekliyor</span>')
@@ -456,12 +472,37 @@
     }).join("");
 
     renderApproxDebtCards(rows);
+    renderSpendTotals(rows);
     renderTripApproxTotal(activeExpenses());
     renderDebts(rows);
 
     if (currentProfile.is_admin) {
       $("reportBody").querySelectorAll("tr[data-id]").forEach((r) => r.addEventListener("click", () => openAdminModal(r.dataset.id)));
     }
+  }
+
+  function renderSpendTotals(rows) {
+    const map = new Map();
+    allProfiles.forEach((p) => map.set(p.id, { MYR: 0, VND: 0, USD: 0, TL: 0 }));
+    rows.forEach((e) => {
+      if (!map.has(e.payer_id)) map.set(e.payer_id, { MYR: 0, VND: 0, USD: 0, TL: 0 });
+      map.get(e.payer_id)[e.currency] += Number(e.amount);
+    });
+
+    const used = [...map.entries()].filter(([, totals]) => CURRENCIES.some((c) => totals[c] !== 0));
+    const grid = $("spendTotalsGrid");
+    if (!used.length) {
+      grid.className = "totals-grid empty-state";
+      grid.textContent = "Henüz harcama toplamı bulunmuyor.";
+      return;
+    }
+
+    grid.className = "totals-grid";
+    grid.innerHTML = used.map(([id, totals]) => `
+      <div class="total-card spend-total-card">
+        <div class="total-user">${escapeHtml(profileName(id))}</div>
+        ${CURRENCIES.map((c) => `<div class="total-line"><span>${c}</span><strong>${formatAmount(totals[c], c)}</strong></div>`).join("")}
+      </div>`).join("");
   }
 
   function rateFor(currency) {
@@ -690,6 +731,7 @@
 
   function clearFilters() {
     ["filterStart", "filterEnd", "filterUser", "filterParticipant", "filterCurrency", "filterPayment"].forEach((id) => $(id).value = "");
+    reportDetailsExpanded = false;
     renderReport();
   }
 
@@ -914,8 +956,15 @@
 
     document.querySelectorAll(".nav-tab").forEach((t) => t.addEventListener("click", () => switchPage(t.dataset.page)));
 
-    ["filterStart", "filterEnd", "filterUser", "filterParticipant", "filterCurrency", "filterPayment"].forEach((id) => $(id).addEventListener("change", renderReport));
+    ["filterStart", "filterEnd", "filterUser", "filterParticipant", "filterCurrency", "filterPayment"].forEach((id) => $(id).addEventListener("change", () => {
+      reportDetailsExpanded = false;
+      renderReport();
+    }));
     $("clearFiltersBtn").addEventListener("click", clearFilters);
+    $("toggleReportDetailsBtn").addEventListener("click", () => {
+      reportDetailsExpanded = !reportDetailsExpanded;
+      renderReport();
+    });
     $("refreshReportBtn").addEventListener("click", async () => {
       try { await loadBaseData(); showToast("Rapor yenilendi."); }
       catch (_) { showToast("Rapor yenilenemedi."); }

@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <title>TripSplit</title>
-  <link rel="stylesheet" href="styles.css?v=3.6" />
+  <link rel="stylesheet" href="styles.css?v=3.7" />
 </head>
 <body>
   <div id="offlineBanner" class="offline-banner hidden">İnternet yok — yeni kayıt veya değişiklik kaydedilemez.</div>
@@ -171,9 +171,19 @@
           <div id="totalsGrid" class="totals-grid empty-state">Yaklaşık borçlar hesaplanıyor…</div>
         </div>
 
-        <div class="panel table-panel">
+        <div class="panel">
           <div class="section-title">
-            <div><h3>Harcama Detayları</h3><p>Admin satıra dokunarak düzenleyebilir.</p></div>
+            <div>
+              <h3>Kim Ne Kadar Harcadı?</h3>
+              <p>Gerçek harcama tutarları kendi para birimleriyle gösterilir.</p>
+            </div>
+          </div>
+          <div id="spendTotalsGrid" class="totals-grid empty-state">Harcama toplamları hesaplanıyor…</div>
+        </div>
+
+        <div class="panel table-panel">
+          <div class="section-title report-details-title">
+            <div><h3>Harcama Detayları</h3><p id="reportLimitNote">Son 5 kayıt gösteriliyor.</p></div>
             <span id="recordCount" class="count-pill">0 kayıt</span>
           </div>
           <div class="table-wrap">
@@ -194,6 +204,7 @@
             </table>
             <div id="reportEmpty" class="table-empty hidden">Bu filtrelere uygun harcama yok.</div>
           </div>
+          <button id="toggleReportDetailsBtn" class="secondary full-button report-toggle-button hidden" type="button">Tümünü Göster</button>
         </div>
 
         <div class="panel table-panel">
@@ -287,7 +298,7 @@
   <div id="toast" class="toast hidden"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="config.js?v=3.6"></script>
-  <script src="app.js?v=3.6"></script>
+  <script src="config.js?v=3.7"></script>
+  <script src="app.js?v=3.7"></script>
 </body>
 </html>
