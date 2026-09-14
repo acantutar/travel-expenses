@@ -207,3 +207,43 @@ button.my-entry-card:active{transform:scale(.995)}
   .mine-page{padding-left:12px;padding-right:12px}
   .my-entry-card{border-radius:16px;padding:12px}
 }
+
+/* v3.6 - Yaklaşık TL borç özeti ve gezi toplamı */
+.trip-total-card{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:8px 16px;
+  align-items:center;
+  margin-bottom:14px;
+  padding:18px;
+  border-radius:22px;
+  color:#fff;
+  background:linear-gradient(135deg,#0f766e 0%,#12988c 56%,#f0a552 145%);
+  box-shadow:0 12px 30px rgba(15,118,110,.18);
+}
+.trip-total-label{font-size:.92rem;font-weight:850;letter-spacing:.01em}
+.trip-total-note{font-size:.74rem;opacity:.82;margin-top:3px;line-height:1.35}
+.trip-total-amount{font-size:1.5rem;font-weight:900;white-space:nowrap;text-align:right}
+.trip-total-meta{grid-column:1/-1;font-size:.7rem;opacity:.82;padding-top:5px;border-top:1px solid rgba(255,255,255,.18);line-height:1.4}
+.approx-warning{margin:0 0 10px;padding:9px 11px;border-radius:11px;background:#fff7df;color:#795812;border:1px solid #f5df9c;font-size:.76rem}
+.approx-debt-card{display:flex;flex-direction:column;min-height:150px}
+.approx-card-caption{font-size:.72rem;color:var(--muted);margin:-3px 0 7px}
+.approx-debt-line strong{color:#17313a}
+.approx-no-debt{color:var(--muted);font-size:.82rem;padding:9px 0 12px}
+.approx-total-line{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:auto;padding-top:9px;border-top:1px dashed #d9e8e5;font-size:.78rem}
+.approx-total-line span{color:#49666b;font-weight:750}
+.approx-total-line strong{color:var(--teal);font-size:.9rem;white-space:nowrap}
+.rate-admin-block{margin-top:18px;padding-top:18px;border-top:1px solid var(--line)}
+.rate-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.rate-grid label{font-size:.78rem}
+.rate-grid input{min-height:43px;padding:8px 10px}
+.rate-save-button{grid-column:1/-1}
+
+@media(max-width:600px){
+  .trip-total-card{grid-template-columns:1fr;padding:16px;gap:5px}
+  .trip-total-amount{text-align:left;font-size:1.4rem;margin-top:2px}
+  .trip-total-meta{margin-top:5px}
+  .rate-grid{grid-template-columns:1fr}
+  .rate-save-button{grid-column:auto}
+  .approx-debt-card{min-height:0}
+}

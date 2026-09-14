@@ -21,6 +21,8 @@
   let allProfiles = [];
   let allVersions = [];
   let currentExpenses = [];
+  let displayRateRows = [];
+  let displayRates = { MYR: null, VND: null, USD: null, TL: 1 };
   let toastTimer = null;
 
   function setScreen(name) {
@@ -151,7 +153,8 @@
       localStorage.setItem("tripSplitMirrorV35", JSON.stringify({
         saved_at: new Date().toISOString(),
         profiles: allProfiles,
-        expense_versions: allVersions
+        expense_versions: allVersions,
+        display_rates: displayRateRows
       }));
     } catch (_) {}
   }
@@ -256,9 +259,10 @@
       return;
     }
 
-    const [pRes, vRes] = await Promise.all([
+    const [pRes, vRes, rRes] = await Promise.all([
       client.from("profiles").select("id,username,is_admin,created_at").order("username"),
-      client.from("expense_versions").select("*").order("created_at", { ascending: false }).limit(20000)
+      client.from("expense_versions").select("*").order("created_at", { ascending: false }).limit(20000),
+      client.from("display_rates").select("currency,tl_rate,updated_at,updated_by").order("currency")
     ]);
 
     if (pRes.error) throw pRes.error;
@@ -268,9 +272,18 @@
     allVersions = vRes.data || [];
     currentExpenses = latestExpensesFromVersions(allVersions);
 
+    displayRateRows = rRes.error ? [] : (rRes.data || []);
+    displayRates = { MYR: null, VND: null, USD: null, TL: 1 };
+    displayRateRows.forEach((r) => {
+      if (Object.prototype.hasOwnProperty.call(displayRates, r.currency) && r.tl_rate !== null) {
+        displayRates[r.currency] = Number(r.tl_rate);
+      }
+    });
+
     persistLocalMirror();
     populateSelectors();
     renderParticipantPickers();
+    renderDisplayRateAdmin();
     renderReport();
     renderMyEntries();
   }
@@ -442,7 +455,8 @@
       </tr>`;
     }).join("");
 
-    renderTotals(rows);
+    renderApproxDebtCards(rows);
+    renderTripApproxTotal(activeExpenses());
     renderDebts(rows);
 
     if (currentProfile.is_admin) {
@@ -450,28 +464,160 @@
     }
   }
 
-  function renderTotals(rows) {
-    const map = new Map();
-    allProfiles.forEach((p) => map.set(p.id, { MYR: 0, VND: 0, USD: 0, TL: 0 }));
+  function rateFor(currency) {
+    return currency === "TL" ? 1 : Number(displayRates[currency] || 0);
+  }
+
+  function formatApproxTl(value) {
+    return `≈ ₺${formatAmount(value, "TL")}`;
+  }
+
+  function calculateApproxTlDebts(rows) {
+    const net = new Map();
+    const missing = new Set();
+
+    const add = (userId, delta) => net.set(userId, (net.get(userId) || 0) + delta);
+
     rows.forEach((e) => {
-      if (!map.has(e.payer_id)) map.set(e.payer_id, { MYR: 0, VND: 0, USD: 0, TL: 0 });
-      map.get(e.payer_id)[e.currency] += Number(e.amount);
+      const rate = rateFor(e.currency);
+      if (!rate) {
+        missing.add(e.currency);
+        return;
+      }
+
+      // Yaklaşık bölüm bilinçli olarak adminin girdiği genel kuru kullanır.
+      // Kartın tekil kesin TL tutarı bu özet hesabına karışmaz.
+      const total = toMinor(Number(e.amount) * rate, "TL");
+      const ids = [...e.participant_ids].sort();
+      const n = ids.length;
+      if (!n) return;
+      const base = Math.floor(total / n);
+      const rem = total % n;
+
+      add(e.payer_id, total);
+      ids.forEach((id, i) => add(id, -(base + (i < rem ? 1 : 0))));
     });
 
-    const used = [...map.entries()].filter(([, t]) => CURRENCIES.some((c) => t[c] !== 0));
+    const debtors = [...net.entries()]
+      .filter(([, v]) => v < 0)
+      .map(([id, v]) => ({ id, amt: -v }))
+      .sort((a, b) => b.amt - a.amt);
+    const creditors = [...net.entries()]
+      .filter(([, v]) => v > 0)
+      .map(([id, v]) => ({ id, amt: v }))
+      .sort((a, b) => b.amt - a.amt);
+
+    const debts = [];
+    let i = 0, j = 0;
+    while (i < debtors.length && j < creditors.length) {
+      const x = Math.min(debtors[i].amt, creditors[j].amt);
+      if (x > 0) debts.push({ debtor: debtors[i].id, creditor: creditors[j].id, minor: x });
+      debtors[i].amt -= x;
+      creditors[j].amt -= x;
+      if (debtors[i].amt === 0) i++;
+      if (creditors[j].amt === 0) j++;
+    }
+
+    return { debts, missing };
+  }
+
+  function renderApproxDebtCards(rows) {
+    const { debts, missing } = calculateApproxTlDebts(rows);
     const grid = $("totalsGrid");
-    if (!used.length) {
-      grid.className = "totals-grid empty-state";
-      grid.textContent = "Henüz toplam bulunmuyor.";
-      return;
+    const warning = $("approxDebtWarning");
+
+    if (missing.size) {
+      warning.textContent = `Yaklaşık hesap kısmi: ${[...missing].join(", ")} için admin kuru girilmemiş.`;
+      warning.classList.remove("hidden");
+    } else {
+      warning.classList.add("hidden");
+      warning.textContent = "";
     }
 
     grid.className = "totals-grid";
-    grid.innerHTML = used.map(([id, t]) => `
-      <div class="total-card">
-        <div class="total-user">${escapeHtml(profileName(id))}</div>
-        ${CURRENCIES.map((c) => `<div class="total-line"><span>${c}</span><strong>${formatAmount(t[c], c)}</strong></div>`).join("")}
-      </div>`).join("");
+    grid.innerHTML = allProfiles.map((p) => {
+      const outgoing = debts.filter((d) => d.debtor === p.id);
+      const totalMinor = outgoing.reduce((sum, d) => sum + d.minor, 0);
+      const lines = outgoing.length
+        ? outgoing.map((d) => `<div class="total-line approx-debt-line"><span>${escapeHtml(profileName(d.creditor))}</span><strong>${formatApproxTl(fromMinor(d.minor, "TL"))}</strong></div>`).join("")
+        : '<div class="approx-no-debt">Ödenecek yaklaşık borç yok</div>';
+
+      return `<div class="total-card approx-debt-card">
+        <div class="total-user">${escapeHtml(p.username)}</div>
+        <div class="approx-card-caption">Kime yaklaşık ne kadar ödeyecek?</div>
+        ${lines}
+        <div class="approx-total-line"><span>Toplam Yaklaşık Borcu</span><strong>${formatApproxTl(fromMinor(totalMinor, "TL"))}</strong></div>
+      </div>`;
+    }).join("");
+  }
+
+  function renderTripApproxTotal(rows) {
+    let totalMinor = 0;
+    const missing = new Set();
+
+    rows.forEach((e) => {
+      const rate = rateFor(e.currency);
+      if (!rate) {
+        missing.add(e.currency);
+        return;
+      }
+      totalMinor += toMinor(Number(e.amount) * rate, "TL");
+    });
+
+    $("tripApproxTotal").textContent = formatApproxTl(fromMinor(totalMinor, "TL"));
+    const rateParts = ["MYR", "VND", "USD"]
+      .filter((c) => rateFor(c))
+      .map((c) => `${c} ${rateFor(c).toLocaleString("tr-TR", { maximumFractionDigits: 8 })} TL`);
+    const missingText = missing.size ? ` • Eksik kur: ${[...missing].join(", ")}` : "";
+    $("tripApproxMeta").textContent = `${rows.length} aktif harcama • ${rateParts.join(" • ") || "Kur bekleniyor"}${missingText}`;
+  }
+
+  function renderDisplayRateAdmin() {
+    if (!currentProfile?.is_admin) return;
+    ["MYR", "VND", "USD"].forEach((c) => {
+      const el = $(`rate${c}`);
+      if (el) el.value = displayRates[c] || "";
+    });
+
+    const latest = displayRateRows
+      .filter((r) => r.updated_at)
+      .sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))[0];
+    $("displayRatesUpdated").textContent = latest
+      ? `Son güncelleme: ${new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(latest.updated_at))}`
+      : "Henüz yaklaşık kur girilmedi.";
+  }
+
+  async function saveDisplayRates(e) {
+    e.preventDefault();
+    clearMessage($("displayRatesMessage"));
+    if (!currentProfile?.is_admin) return;
+    if (!navigator.onLine) {
+      showMessage($("displayRatesMessage"), "warning", "İnternet bağlantısı yok. Kurlar kaydedilmedi.");
+      return;
+    }
+
+    const myr = Number($("rateMYR").value);
+    const vnd = Number($("rateVND").value);
+    const usd = Number($("rateUSD").value);
+    if (![myr, vnd, usd].every((x) => Number.isFinite(x) && x > 0)) {
+      showMessage($("displayRatesMessage"), "error", "MYR, VND ve USD için sıfırdan büyük TL karşılığı gir.");
+      return;
+    }
+
+    const btn = $("saveDisplayRatesBtn");
+    btn.disabled = true;
+    btn.textContent = "Kaydediliyor…";
+    try {
+      const { error } = await client.rpc("set_display_rates", { p_myr: myr, p_vnd: vnd, p_usd: usd });
+      if (error) throw error;
+      await loadBaseData();
+      showMessage($("displayRatesMessage"), "success", "✓ Yaklaşık TL kurları kaydedildi. Harcama kayıtları değiştirilmedi.");
+    } catch (err) {
+      showMessage($("displayRatesMessage"), "error", isNetworkLikeError(err) ? "Kurlar kaydedilemedi. Bağlantıyı kontrol et." : err.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Yaklaşık Kurları Kaydet";
+    }
   }
 
   function toMinor(amount, currency) {
@@ -702,7 +848,7 @@
 
   function downloadFullBackup() {
     if (!currentProfile?.is_admin) return;
-    const payload = { exported_at: new Date().toISOString(), profiles: allProfiles, expense_versions: allVersions };
+    const payload = { exported_at: new Date().toISOString(), profiles: allProfiles, expense_versions: allVersions, display_rates: displayRateRows };
     downloadBlob(`tripsplit-backup-${localToday()}.json`, JSON.stringify(payload, null, 2), "application/json");
     showToast("Tam JSON yedeği indirildi.");
   }
@@ -787,6 +933,7 @@
     $("editCurrency").addEventListener("change", toggleTlField);
 
     $("passwordAdminForm").addEventListener("submit", changeUserPassword);
+    $("displayRatesForm").addEventListener("submit", saveDisplayRates);
     $("backupJsonBtn").addEventListener("click", downloadFullBackup);
     $("exportCsvBtn").addEventListener("click", exportCsv);
     $("accountLogoutBtn").addEventListener("click", logout);

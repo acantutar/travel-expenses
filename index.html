@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <title>TripSplit</title>
-  <link rel="stylesheet" href="styles.css?v=3.5" />
+  <link rel="stylesheet" href="styles.css?v=3.6" />
 </head>
 <body>
   <div id="offlineBanner" class="offline-banner hidden">İnternet yok — yeni kayıt veya değişiklik kaydedilemez.</div>
@@ -151,9 +151,24 @@
           <button id="clearFiltersBtn" class="secondary full-button" type="button">Filtreleri Temizle</button>
         </div>
 
+        <div class="trip-total-card">
+          <div>
+            <div class="trip-total-label">Gezinin Yaklaşık Toplam Harcaması</div>
+            <div class="trip-total-note">Admin tarafından girilen yaklaşık TL kurlarıyla hesaplanır.</div>
+          </div>
+          <div id="tripApproxTotal" class="trip-total-amount">—</div>
+          <div id="tripApproxMeta" class="trip-total-meta"></div>
+        </div>
+
         <div class="panel">
-          <div class="section-title"><h3>Kim Ne Kadar Ödedi?</h3></div>
-          <div id="totalsGrid" class="totals-grid empty-state">Rapor yükleniyor…</div>
+          <div class="section-title">
+            <div>
+              <h3>Kişilerin Yaklaşık Borcu</h3>
+              <p>Bu kartlar yalnızca adminin girdiği yaklaşık TL kurlarıyla hesaplanır. Kesin borç tablosu aşağıda ayrıca durur.</p>
+            </div>
+          </div>
+          <div id="approxDebtWarning" class="approx-warning hidden"></div>
+          <div id="totalsGrid" class="totals-grid empty-state">Yaklaşık borçlar hesaplanıyor…</div>
         </div>
 
         <div class="panel table-panel">
@@ -215,6 +230,22 @@
             <button id="adminPasswordBtn" class="primary" type="submit">Şifreyi Değiştir</button>
           </form>
           <div id="passwordMessage" class="message hidden"></div>
+          <div class="rate-admin-block">
+            <div class="section-title">
+              <div>
+                <h3>Yaklaşık TL Kurları</h3>
+                <p>Sadece yaklaşık borç kartlarını ve gezi toplamını etkiler. Harcama kayıtlarını ve kesin borç hesabını değiştirmez.</p>
+              </div>
+            </div>
+            <form id="displayRatesForm" class="rate-grid">
+              <label><span>1 MYR kaç TL?</span><input id="rateMYR" type="number" min="0.000001" step="any" inputmode="decimal" placeholder="Örn. 9.80" required /></label>
+              <label><span>1 VND kaç TL?</span><input id="rateVND" type="number" min="0.000001" step="any" inputmode="decimal" placeholder="Örn. 0.0016" required /></label>
+              <label><span>1 USD kaç TL?</span><input id="rateUSD" type="number" min="0.000001" step="any" inputmode="decimal" placeholder="Örn. 41.50" required /></label>
+              <button id="saveDisplayRatesBtn" class="primary rate-save-button" type="submit">Yaklaşık Kurları Kaydet</button>
+            </form>
+            <div id="displayRatesMessage" class="message hidden"></div>
+            <p id="displayRatesUpdated" class="backup-note">Henüz yaklaşık kur girilmedi.</p>
+          </div>
           <div class="admin-tools">
             <button id="backupJsonBtn" class="secondary" type="button">Tam Yedek (JSON)</button>
             <button id="exportCsvBtn" class="secondary" type="button">CSV İndir</button>
@@ -256,7 +287,7 @@
   <div id="toast" class="toast hidden"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="config.js?v=3.5"></script>
-  <script src="app.js?v=3.5"></script>
+  <script src="config.js?v=3.6"></script>
+  <script src="app.js?v=3.6"></script>
 </body>
 </html>
