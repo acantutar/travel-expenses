@@ -256,3 +256,74 @@ button.my-entry-card:active{transform:scale(.995)}
   .report-toggle-button{position:sticky;left:0;width:100%;min-height:44px;margin-top:10px}
   .report-details-title p{line-height:1.35}
 }
+
+
+/* v3.8 — compact mobile report tables; visual-only, no DB changes */
+.report-detail-table,
+.debt-table{width:100%}
+
+/* Desktop/tablet: reduce needless whitespace while preserving readability. */
+.report-detail-table{min-width:820px}
+.debt-table{min-width:560px}
+.report-detail-table th,.report-detail-table td,
+.debt-table th,.debt-table td{padding-left:9px;padding-right:9px}
+
+@media(max-width:600px){
+  /* Harcama Detayları: still horizontally scrollable, but much tighter than before. */
+  .report-detail-table{
+    min-width:690px;
+    table-layout:fixed;
+    font-size:.76rem;
+  }
+  .report-detail-table th,
+  .report-detail-table td{
+    padding:8px 6px;
+  }
+  .report-detail-table th{
+    white-space:normal;
+    line-height:1.15;
+    font-size:.64rem;
+    letter-spacing:.025em;
+  }
+  .report-detail-table td{white-space:nowrap}
+  .report-detail-table th:nth-child(1),.report-detail-table td:nth-child(1){width:86px}
+  .report-detail-table th:nth-child(2),.report-detail-table td:nth-child(2){width:118px}
+  .report-detail-table th:nth-child(3),.report-detail-table td:nth-child(3){width:72px}
+  .report-detail-table th:nth-child(4),.report-detail-table td:nth-child(4){width:58px}
+  .report-detail-table th:nth-child(5),.report-detail-table td:nth-child(5){width:62px}
+  .report-detail-table th:nth-child(6),.report-detail-table td:nth-child(6){width:72px}
+  .report-detail-table th:nth-child(7),.report-detail-table td:nth-child(7){width:132px}
+  .report-detail-table th:nth-child(8),.report-detail-table td:nth-child(8){width:90px}
+  .report-detail-table .pill-list{gap:3px}
+  .report-detail-table .pill{padding:3px 5px;font-size:.65rem}
+  .report-detail-table .subtext{font-size:.64rem;margin-top:2px}
+
+  /* Borç tablosu: all columns kept close together and fitted to the mobile card. */
+  .debt-table{
+    min-width:100%;
+    width:100%;
+    table-layout:fixed;
+    font-size:.76rem;
+  }
+  .debt-table th,
+  .debt-table td{
+    padding:9px 5px;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  .debt-table th{
+    white-space:normal;
+    line-height:1.08;
+    font-size:.62rem;
+    letter-spacing:.02em;
+  }
+  .debt-table td{white-space:nowrap}
+  .debt-table th:nth-child(1),.debt-table td:nth-child(1){width:24%}
+  .debt-table th:nth-child(2),.debt-table td:nth-child(2){width:24%}
+  .debt-table th:nth-child(3),.debt-table td:nth-child(3){width:20%}
+  .debt-table th:nth-child(4),.debt-table td:nth-child(4){width:13%}
+  .debt-table th:nth-child(5),.debt-table td:nth-child(5){width:19%}
+  .debt-table th:nth-child(3),.debt-table td:nth-child(3){text-align:right}
+  .debt-table th:nth-child(4),.debt-table td:nth-child(4),
+  .debt-table th:nth-child(5),.debt-table td:nth-child(5){text-align:center}
+}
