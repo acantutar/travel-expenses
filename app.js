@@ -510,7 +510,11 @@
   }
 
   function formatApproxTl(value) {
-    return `≈ ₺${formatAmount(value, "TL")}`;
+    const rounded = new Intl.NumberFormat("tr-TR", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(Number(value || 0));
+    return `≈ ₺${rounded}`;
   }
 
   function calculateApproxTlDebts(rows) {
