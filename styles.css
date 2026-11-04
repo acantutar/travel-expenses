@@ -385,3 +385,27 @@ button.my-entry-card:active{transform:scale(.995)}
   .settlement-table th:nth-child(5),.settlement-table td:nth-child(5){width:55px}
   .settlement-table th:nth-child(6),.settlement-table td:nth-child(6){width:145px}
 }
+
+/* v4 - multi-trip selection and membership */
+.trip-switcher{margin:10px 12px 18px;padding:14px 16px;border-radius:16px}
+.trip-switcher-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+.trip-switcher-heading strong{font-size:1rem;color:var(--text)}
+.trip-switcher-controls{display:flex;gap:8px}
+.trip-switcher-controls select{flex:1;min-width:0;font-size:.9rem;font-weight:650;border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:10px;color:var(--text)}
+.trip-switcher-controls button{white-space:nowrap;font-size:.85rem;padding:10px 12px}
+.trip-empty{margin:12px;padding:24px;text-align:center;border-radius:16px}
+.trip-empty h2{margin:0 0 10px}.trip-empty p{color:var(--muted);line-height:1.5}
+.no-trip #page-add,.no-trip #page-mine,.no-trip #page-report{display:none!important}
+.no-trip .nav-tab[data-page="add"],.no-trip .nav-tab[data-page="mine"],.no-trip .nav-tab[data-page="report"]{display:none}
+.trip-member-list{display:grid;gap:8px;margin:12px 0 16px}
+.trip-member-row{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.trip-member-row span{font-weight:650}
+.trip-member-row small{display:block;color:var(--muted);font-weight:400;font-size:.74rem}
+.trip-member-row button{white-space:nowrap;font-size:.8rem;padding:7px 11px}
+.trip-add-member-form{display:flex;gap:8px;align-items:end}
+.trip-add-member-form label{flex:1;min-width:0}
+.trip-add-member-form label span{display:block;margin-bottom:5px;font-size:.8rem;font-weight:650}
+.trip-add-member-form input{width:100%}
+.trip-add-member-form button{white-space:nowrap}
+#tripRatePanel{margin-top:16px}
+@media(max-width:420px){.trip-switcher-controls{flex-wrap:wrap}.trip-switcher-controls select{flex-basis:100%}.trip-switcher-controls button{width:100%}.trip-add-member-form{flex-wrap:wrap}.trip-add-member-form label{flex-basis:100%}.trip-add-member-form button{width:100%}}

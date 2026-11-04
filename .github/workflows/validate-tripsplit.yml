@@ -1,0 +1,37 @@
+name: Validate TripSplit frontend
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  static-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: JavaScript syntax
+        run: node --check app.js
+      - name: TripSplit v4 wiring
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          html = Path("index.html").read_text()
+          js = Path("app.js").read_text()
+          refs = set(re.findall(r'\$\("([\w-]+)"\)', js))
+          ids = set(re.findall(r'id="([\w-]+)"', html))
+          assert not (refs - ids), f"Missing HTML elements: {refs - ids}"
+          assert "app.js?v=4.0" in html
+          assert "styles.css?v=4.0" in html
+          for key in ("create_trip", "create_trip_expense", "create_trip_settlement",
+                      "trip_members", "trip_display_rates", "tripSelect", "set_trip_member_active"):
+              assert key in (js + html), key
+          assert len(ids) == len(re.findall(r'id="([\w-]+)"', html)), "Duplicate HTML ids"
+          sql=Path("migrations/v4_multitrip.sql").read_text()
+          assert "enable row level security" in sql
+          print("TripSplit v4 static checks passed")
+          PY
