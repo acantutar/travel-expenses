@@ -585,6 +585,8 @@
     $("tripSelect").disabled = true;
     try {
       currentTripId = nextId;
+      $("inviteShareBox").classList.add("hidden");
+      $("generatedInviteLink").value="";
       renderTripHeader();
       clearFiltersWithoutRender();
       await loadBaseData();
@@ -635,6 +637,8 @@
       await loadBaseData();
       $("tripCreateModal").classList.add("hidden");
       $("newTripForm").reset();
+      $("inviteShareBox").classList.add("hidden");
+      $("generatedInviteLink").value="";
       setupNewTripCurrencyForm();
       switchPage("add");
       showToast("Yeni gezi oluşturuldu. Üyeleri Hesabım'dan ekleyebilirsin.");
