@@ -5,12 +5,7 @@
   const isConfigured = Boolean(cfg.SUPABASE_URL && cfg.SUPABASE_PUBLISHABLE_KEY);
   const $ = (id) => document.getElementById(id);
 
-  const LOGIN_USERS = {
-    act:   { email: "act@travel-expenses.app", display: "ACT" },
-    busra: { email: "busra@travel-expenses.app", display: "Büşra" },
-    fatma: { email: "fatma@travel-expenses.app", display: "Fatma" },
-    sena:  { email: "sena@travel-expenses.app", display: "Sena" }
-  };
+  const AUTH_EMAIL_DOMAIN = cfg.AUTH_EMAIL_DOMAIN || "travel-expenses.app";
 
   const CURRENCIES = ["MYR", "VND", "USD", "TL"];
   const DECIMALS = { VND: 0, MYR: 2, USD: 2, TL: 2 };
@@ -21,6 +16,8 @@
   let allProfiles = [];
   let allVersions = [];
   let currentExpenses = [];
+  let allSettlementVersions = [];
+  let currentSettlements = [];
   let displayRateRows = [];
   let displayRates = { MYR: null, VND: null, USD: null, TL: 1 };
   let toastTimer = null;
@@ -67,6 +64,27 @@
       .replaceAll(">", "&gt;")
       .replaceAll('"', "&quot;")
       .replaceAll("'", "&#039;");
+  }
+
+  function normalizeLoginName(value) {
+    return String(value || "")
+      .trim()
+      .toLocaleLowerCase("tr-TR")
+      .replaceAll("ı", "i")
+      .replaceAll("ğ", "g")
+      .replaceAll("ü", "u")
+      .replaceAll("ş", "s")
+      .replaceAll("ö", "o")
+      .replaceAll("ç", "c")
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, ".")
+      .replace(/^\.+|\.+$/g, "")
+      .slice(0, 60);
+  }
+
+  function activeProfiles() {
+    return allProfiles.filter((p) => p.is_active !== false);
   }
 
   function formatAmount(v, c) {
@@ -135,6 +153,15 @@
     return Boolean(currentProfile && (currentProfile.is_admin || originalEnteredBy(expenseId) === currentProfile.id));
   }
 
+  function originalSettlementEnteredBy(settlementId) {
+    const first = allSettlementVersions.find((v) => v.settlement_id === settlementId && Number(v.version_no) === 1);
+    return first?.changed_by || null;
+  }
+
+  function canManageSettlement(settlementId) {
+    return Boolean(currentProfile && (currentProfile.is_admin || originalSettlementEnteredBy(settlementId) === currentProfile.id));
+  }
+
   function isNetworkLikeError(e) {
     const m = String(e?.message || e || "").toLowerCase();
     return !navigator.onLine || m.includes("fetch") || m.includes("network") || m.includes("failed to fetch");
@@ -149,12 +176,22 @@
     return [...byId.values()].sort((a, b) => String(b.spent_on).localeCompare(String(a.spent_on)) || new Date(b.created_at) - new Date(a.created_at));
   }
 
+  function latestSettlementsFromVersions(versions) {
+    const byId = new Map();
+    versions.forEach((v) => {
+      const prev = byId.get(v.settlement_id);
+      if (!prev || Number(v.version_no) > Number(prev.version_no)) byId.set(v.settlement_id, v);
+    });
+    return [...byId.values()].sort((a, b) => String(b.spent_on).localeCompare(String(a.spent_on)) || new Date(b.created_at) - new Date(a.created_at));
+  }
+
   function persistLocalMirror() {
     try {
       localStorage.setItem("tripSplitMirrorV35", JSON.stringify({
         saved_at: new Date().toISOString(),
         profiles: allProfiles,
         expense_versions: allVersions,
+        settlement_versions: allSettlementVersions,
         display_rates: displayRateRows
       }));
     } catch (_) {}
@@ -169,6 +206,11 @@
     client = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_PUBLISHABLE_KEY, {
       auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false }
     });
+
+    try {
+      const rememberedLogin = localStorage.getItem("tripSplitLastLogin");
+      if (rememberedLogin && $("loginUser")) $("loginUser").value = rememberedLogin;
+    } catch (_) {}
 
     const { data: { session } } = await client.auth.getSession();
     if (session?.user) await enterApp(session.user);
@@ -192,25 +234,31 @@
       return;
     }
 
-    const key = $("loginUser").value;
-    const userCfg = LOGIN_USERS[key];
+    const rawLogin = $("loginUser").value.trim();
+    const loginName = normalizeLoginName(rawLogin);
     const password = $("password").value;
-    if (!userCfg || !password) return;
+    if (!loginName || !password) return;
 
     const btn = $("authSubmit");
     btn.disabled = true;
     btn.textContent = "Giriş yapılıyor…";
 
     try {
-      const { data, error } = await client.auth.signInWithPassword({ email: userCfg.email, password });
+      const email = `${loginName}@${AUTH_EMAIL_DOMAIN}`;
+      const { data, error } = await client.auth.signInWithPassword({ email, password });
       if (error) throw error;
+      try { localStorage.setItem("tripSplitLastLogin", rawLogin); } catch (_) {}
       await enterApp(data.user);
       $("password").value = "";
     } catch (err) {
+      const msg = String(err?.message || "").toLowerCase();
+      const inactive = msg.includes("banned") || msg.includes("ban") || msg.includes("disabled");
       showMessage(
         $("authMessage"),
         "error",
-        isNetworkLikeError(err) ? "Giriş yapılamadı. İnternet bağlantısını kontrol et." : "Kullanıcı veya şifre hatalı."
+        isNetworkLikeError(err)
+          ? "Giriş yapılamadı. İnternet bağlantısını kontrol et."
+          : (inactive ? "Bu kullanıcı hesabı pasif durumda. Admin ile iletişime geç." : "Kullanıcı adı veya şifre hatalı.")
       );
     } finally {
       btn.disabled = false;
@@ -222,13 +270,20 @@
     currentUser = user;
     const { data, error } = await client
       .from("profiles")
-      .select("id,username,is_admin")
+      .select("id,username,login_name,is_admin,is_active")
       .eq("id", user.id)
       .single();
 
     if (error || !data) {
+      await client.auth.signOut().catch(() => undefined);
       setScreen("auth");
-      showMessage($("authMessage"), "error", "Profil bulunamadı. v3.2 schema.sql dosyasını Supabase'te çalıştır.");
+      showMessage($("authMessage"), "error", "Profil bulunamadı veya hesap pasif. v3.11 migration'ını kontrol et.");
+      return;
+    }
+    if (data.is_active === false) {
+      await client.auth.signOut().catch(() => undefined);
+      setScreen("auth");
+      showMessage($("authMessage"), "error", "Bu kullanıcı hesabı pasif durumda.");
       return;
     }
 
@@ -243,14 +298,20 @@
     $("expenseDate").max = today;
     if (!$("expenseDate").value) $("expenseDate").value = today;
     $("editSpentOn").max = today;
+    $("settlementDate").max = today;
+    if (!$("settlementDate").value) $("settlementDate").value = today;
+    $("editSettlementDate").max = today;
 
     const rememberedCurrency = getRememberedChoice("currency");
     if (CURRENCIES.includes(rememberedCurrency)) $("expenseCurrency").value = rememberedCurrency;
     const rememberedPayment = getRememberedChoice("payment");
     if (["Kart", "Cash"].includes(rememberedPayment)) $("expensePayment").value = rememberedPayment;
+    const rememberedSettlementCurrency = getRememberedChoice("settlementCurrency");
+    if (CURRENCIES.includes(rememberedSettlementCurrency)) $("settlementCurrency").value = rememberedSettlementCurrency;
 
     setScreen("app");
     switchPage("add");
+    showEntryType("expense");
     await loadBaseData();
   }
 
@@ -260,18 +321,22 @@
       return;
     }
 
-    const [pRes, vRes, rRes] = await Promise.all([
-      client.from("profiles").select("id,username,is_admin,created_at").order("username"),
+    const [pRes, vRes, sRes, rRes] = await Promise.all([
+      client.from("profiles").select("id,username,login_name,is_admin,is_active,created_at").order("username"),
       client.from("expense_versions").select("*").order("created_at", { ascending: false }).limit(20000),
+      client.from("settlement_versions").select("*").order("created_at", { ascending: false }).limit(20000),
       client.from("display_rates").select("currency,tl_rate,updated_at,updated_by").order("currency")
     ]);
 
     if (pRes.error) throw pRes.error;
     if (vRes.error) throw vRes.error;
+    if (sRes.error) throw sRes.error;
 
     allProfiles = pRes.data || [];
     allVersions = vRes.data || [];
     currentExpenses = latestExpensesFromVersions(allVersions);
+    allSettlementVersions = sRes.data || [];
+    currentSettlements = latestSettlementsFromVersions(allSettlementVersions);
 
     displayRateRows = rRes.error ? [] : (rRes.data || []);
     displayRates = { MYR: null, VND: null, USD: null, TL: 1 };
@@ -285,27 +350,45 @@
     populateSelectors();
     renderParticipantPickers();
     renderDisplayRateAdmin();
+    renderAdminUsers();
     renderReport();
     renderMyEntries();
   }
 
   function populateSelectors() {
-    const allOptions = '<option value="">Tümü</option>' + allProfiles.map((p) => `<option value="${p.id}">${escapeHtml(p.username)}</option>`).join("");
+    const profileOptions = '<option value="">Tümü</option>' + allProfiles.map((p) => `<option value="${p.id}">${escapeHtml(p.username)}${p.is_active === false ? " (Pasif)" : ""}</option>`).join("");
     ["filterUser", "filterParticipant"].forEach((id) => {
       const old = $(id).value;
-      $(id).innerHTML = allOptions;
+      $(id).innerHTML = profileOptions;
       $(id).value = old;
     });
 
-    const payerOptions = allProfiles.map((p) => `<option value="${p.id}">${escapeHtml(p.username)}</option>`).join("");
+    const actives = activeProfiles();
+    const activeOptions = actives.map((p) => `<option value="${p.id}">${escapeHtml(p.username)}</option>`).join("");
+    const allUserOptions = allProfiles.map((p) => `<option value="${p.id}">${escapeHtml(p.username)}${p.is_active === false ? " (Pasif)" : ""}</option>`).join("");
+
     const oldExpensePayer = $("expensePayer").value;
     const rememberedPayer = getRememberedPayer();
-    const preferredPayer = [oldExpensePayer, rememberedPayer, currentProfile?.id, allProfiles[0]?.id]
-      .find((id) => id && allProfiles.some((p) => p.id === id)) || "";
-    $("expensePayer").innerHTML = payerOptions;
+    const preferredPayer = [oldExpensePayer, rememberedPayer, currentProfile?.id, actives[0]?.id]
+      .find((id) => id && actives.some((p) => p.id === id)) || "";
+    $("expensePayer").innerHTML = activeOptions;
     $("expensePayer").value = preferredPayer;
-    $("editPayer").innerHTML = payerOptions;
-    $("adminPasswordUser").innerHTML = payerOptions;
+
+    // Düzenle ekranında eski/pasif kişilerin tarihsel kaydı korunabilsin.
+    $("editPayer").innerHTML = allUserOptions;
+    $("adminPasswordUser").innerHTML = allUserOptions;
+
+    const rememberedSettlementFrom = getRememberedChoice("settlementFrom");
+    const fromPreferred = [rememberedSettlementFrom, currentProfile?.id, actives[0]?.id].find((id) => id && actives.some((p) => p.id === id)) || "";
+    $("settlementFrom").innerHTML = activeOptions;
+    $("settlementTo").innerHTML = activeOptions;
+    $("settlementFrom").value = fromPreferred;
+    if ($("settlementTo").value === fromPreferred || !$("settlementTo").value) {
+      $("settlementTo").value = actives.find((p) => p.id !== fromPreferred)?.id || fromPreferred;
+    }
+
+    $("editSettlementFrom").innerHTML = allUserOptions;
+    $("editSettlementTo").innerHTML = allUserOptions;
   }
 
   function participantCheckboxHtml(p, scope, checked = true) {
@@ -313,11 +396,22 @@
   }
 
   function renderParticipantPickers() {
-    $("participantPicker").innerHTML = allProfiles.map((p) => participantCheckboxHtml(p, "add", true)).join("") || '<span class="muted">Kullanıcılar henüz oluşturulmamış.</span>';
+    const actives = activeProfiles();
+    $("participantPicker").innerHTML = actives.map((p) => participantCheckboxHtml(p, "add", true)).join("") || '<span class="muted">Aktif kullanıcı bulunmuyor.</span>';
   }
 
   function selectedParticipantIds(scope) {
     return [...document.querySelectorAll(`input[data-scope="${scope}"]:checked`)].map((x) => x.value);
+  }
+
+  function showEntryType(type) {
+    const settlement = type === "settlement";
+    $("expenseForm").classList.toggle("hidden", settlement);
+    $("settlementForm").classList.toggle("hidden", !settlement);
+    $("showExpenseFormBtn").classList.toggle("active", !settlement);
+    $("showSettlementFormBtn").classList.toggle("active", settlement);
+    clearMessage($("expenseMessage"));
+    clearMessage($("settlementMessage"));
   }
 
   async function saveExpense(e) {
@@ -383,33 +477,118 @@
     }
   }
 
+  async function saveSettlement(e) {
+    e.preventDefault();
+    clearMessage($("settlementMessage"));
+    if (!navigator.onLine) {
+      showMessage($("settlementMessage"), "warning", "İnternet bağlantısı yok. Borç ödemesi kaydedilmedi.");
+      return;
+    }
+
+    const fromId = $("settlementFrom").value;
+    const toId = $("settlementTo").value;
+    const amount = Number($("settlementAmount").value);
+    const currency = $("settlementCurrency").value;
+    const spentOn = $("settlementDate").value;
+    const note = $("settlementNote").value.trim();
+
+    if (!fromId || !toId || fromId === toId) {
+      showMessage($("settlementMessage"), "error", "Gönderen ve alan farklı kişiler olmalı.");
+      return;
+    }
+    if (!Number.isFinite(amount) || amount <= 0 || !spentOn) {
+      showMessage($("settlementMessage"), "error", "Tutar ve tarihi kontrol et.");
+      return;
+    }
+
+    const btn = $("saveSettlementBtn");
+    btn.disabled = true;
+    btn.textContent = "Kaydediliyor…";
+    try {
+      const { error } = await client.rpc("create_settlement", {
+        p_from_user_id: fromId,
+        p_to_user_id: toId,
+        p_amount: amount,
+        p_currency: currency,
+        p_spent_on: spentOn,
+        p_note: note || null
+      });
+      if (error) throw error;
+      rememberChoice("settlementFrom", fromId);
+      rememberChoice("settlementCurrency", currency);
+      await loadBaseData();
+      $("settlementAmount").value = "";
+      $("settlementNote").value = "";
+      $("settlementDate").value = localToday();
+      showMessage($("settlementMessage"), "success", "✓ Borç ödemesi kaydedildi. Gezi harcama toplamına eklenmedi.");
+    } catch (err) {
+      showMessage($("settlementMessage"), "error", `✕ ${isNetworkLikeError(err) ? "Kayıt yapılamadı. İnternet bağlantısını kontrol et." : err.message}`);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Borç Ödemesini Kaydet";
+    }
+  }
+
+  function activeSettlements() {
+    return currentSettlements.filter((s) => s.status === "active");
+  }
+
   function activeExpenses() {
     return currentExpenses.filter((e) => e.status === "active");
   }
 
   function renderMyEntries() {
     if (!currentProfile) return;
-    const rows = currentExpenses.filter((e) => originalEnteredBy(e.expense_id) === currentProfile.id);
+
+    const expenseRows = currentExpenses
+      .filter((e) => originalEnteredBy(e.expense_id) === currentProfile.id)
+      .map((e) => ({ type: "expense", row: e }));
+    const settlementRows = currentSettlements
+      .filter((x) => originalSettlementEnteredBy(x.settlement_id) === currentProfile.id)
+      .map((x) => ({ type: "settlement", row: x }));
+
+    const rows = [...expenseRows, ...settlementRows].sort((a, b) =>
+      String(b.row.spent_on).localeCompare(String(a.row.spent_on)) || new Date(b.row.created_at) - new Date(a.row.created_at)
+    );
+
     $("myEntriesEmpty").classList.toggle("hidden", rows.length > 0);
-    $("myEntriesList").innerHTML = rows.map((e) => {
-      const isActive = e.status === "active";
-      const people = e.participant_ids.map(profileName).join(", ");
-      return `<button type="button" class="my-entry-card ${isActive ? "" : "is-voided"}" data-id="${e.expense_id}" ${isActive ? "" : "disabled"}>
+    $("myEntriesList").innerHTML = rows.map(({ type, row }) => {
+      const isActive = row.status === "active";
+      if (type === "settlement") {
+        return `<button type="button" class="my-entry-card settlement-entry ${isActive ? "" : "is-voided"}" data-type="settlement" data-id="${row.settlement_id}" ${isActive ? "" : "disabled"}>
+          <div class="my-entry-top">
+            <span class="my-entry-date">${formatDateOnly(row.spent_on)}</span>
+            <span class="my-entry-status ${isActive ? "settlement-status" : "voided"}">${isActive ? "Borç Ödemesi" : "İptal"}</span>
+          </div>
+          <div class="my-entry-bottom">
+            <span class="my-entry-detail">${escapeHtml(profileName(row.from_user_id))} → ${escapeHtml(profileName(row.to_user_id))}</span>
+            <span class="my-entry-amount">${formatAmount(row.amount, row.currency)} ${row.currency}</span>
+          </div>
+          <div class="my-entry-meta">${row.note ? escapeHtml(row.note) : "Kişiler arası para transferi"}</div>
+          <div class="my-entry-action">${isActive ? "Dokun → Düzelt / İptal Et" : `İptal edilmiş transfer • v${row.version_no}`}</div>
+        </button>`;
+      }
+
+      const people = row.participant_ids.map(profileName).join(", ");
+      return `<button type="button" class="my-entry-card ${isActive ? "" : "is-voided"}" data-type="expense" data-id="${row.expense_id}" ${isActive ? "" : "disabled"}>
         <div class="my-entry-top">
-          <span class="my-entry-date">${formatDateOnly(e.spent_on)}</span>
-          <span class="my-entry-status ${isActive ? "" : "voided"}">${isActive ? "Aktif" : "İptal"}</span>
+          <span class="my-entry-date">${formatDateOnly(row.spent_on)}</span>
+          <span class="my-entry-status ${isActive ? "" : "voided"}">${isActive ? "Harcama" : "İptal"}</span>
         </div>
         <div class="my-entry-bottom">
-          <span class="my-entry-detail">${escapeHtml(e.description)}</span>
-          <span class="my-entry-amount">${formatAmount(e.amount, e.currency)} ${e.currency}</span>
+          <span class="my-entry-detail">${escapeHtml(row.description)}</span>
+          <span class="my-entry-amount">${formatAmount(row.amount, row.currency)} ${row.currency}</span>
         </div>
-        <div class="my-entry-meta">Harcayan: ${escapeHtml(profileName(e.payer_id))} • ${escapeHtml(e.payment_type)}<br>Borca ortak: ${escapeHtml(people)}</div>
-        <div class="my-entry-action">${isActive ? "Dokun → Düzelt / İptal Et" : `İptal edilmiş kayıt • v${e.version_no}`}</div>
+        <div class="my-entry-meta">Harcayan: ${escapeHtml(profileName(row.payer_id))} • ${escapeHtml(row.payment_type)}<br>Borca ortak: ${escapeHtml(people)}</div>
+        <div class="my-entry-action">${isActive ? "Dokun → Düzelt / İptal Et" : `İptal edilmiş kayıt • v${row.version_no}`}</div>
       </button>`;
     }).join("");
 
     $("myEntriesList").querySelectorAll("button[data-id]:not([disabled])").forEach((button) => {
-      button.addEventListener("click", () => openAdminModal(button.dataset.id));
+      button.addEventListener("click", () => {
+        if (button.dataset.type === "settlement") openSettlementModal(button.dataset.id);
+        else openAdminModal(button.dataset.id);
+      });
     });
   }
 
@@ -432,9 +611,30 @@
     });
   }
 
+  function filteredSettlements() {
+    const user = $("filterUser").value;
+    const part = $("filterParticipant").value;
+    const currency = $("filterCurrency").value;
+    const payment = $("filterPayment").value;
+    const start = currentProfile?.is_admin ? $("filterStart").value : "";
+    const end = currentProfile?.is_admin ? $("filterEnd").value : "";
+
+    return activeSettlements().filter((x) => {
+      if (user && x.from_user_id !== user && x.to_user_id !== user) return false;
+      if (part && x.from_user_id !== part && x.to_user_id !== part) return false;
+      if (currency && x.currency !== currency) return false;
+      // Kart/Cash filtresi yalnız harcamalara aittir. Seçiliyse settlement tablosunu o filtre görünümünden çıkar.
+      if (payment) return false;
+      if (start && String(x.spent_on) < start) return false;
+      if (end && String(x.spent_on) > end) return false;
+      return true;
+    });
+  }
+
   function renderReport() {
     if (!currentProfile) return;
     const rows = filteredExpenses();
+    const settlements = filteredSettlements();
     const visibleRows = reportDetailsExpanded ? rows : rows.slice(0, 5);
 
     $("recordCount").textContent = `${rows.length} kayıt`;
@@ -471,14 +671,30 @@
       </tr>`;
     }).join("");
 
-    renderApproxDebtCards(rows);
+    renderSettlementTable(settlements);
+    renderApproxDebtCards(rows, settlements);
     renderSpendTotals(rows);
     renderTripApproxTotal(activeExpenses());
-    renderDebts(rows);
+    renderDebts(rows, settlements);
 
     if (currentProfile.is_admin) {
       $("reportBody").querySelectorAll("tr[data-id]").forEach((r) => r.addEventListener("click", () => openAdminModal(r.dataset.id)));
+      $("settlementBody").querySelectorAll("tr[data-id]").forEach((r) => r.addEventListener("click", () => openSettlementModal(r.dataset.id)));
     }
+  }
+
+  function renderSettlementTable(rows) {
+    $("settlementCount").textContent = `${rows.length} kayıt`;
+    $("settlementEmpty").classList.toggle("hidden", rows.length > 0);
+    $("settlementBody").innerHTML = rows.map((x) => `
+      <tr data-id="${x.settlement_id}" class="${currentProfile?.is_admin ? "admin-clickable" : ""}">
+        <td>${formatDateOnly(x.spent_on)}</td>
+        <td>${escapeHtml(profileName(x.from_user_id))}</td>
+        <td>${escapeHtml(profileName(x.to_user_id))}</td>
+        <td class="number">${formatAmount(x.amount, x.currency)}</td>
+        <td>${x.currency}</td>
+        <td>${escapeHtml(x.note || "—")}<span class="subtext">v${x.version_no}</span></td>
+      </tr>`).join("");
   }
 
   function renderSpendTotals(rows) {
@@ -545,7 +761,7 @@
     return `≈ ₺${rounded}`;
   }
 
-  function calculateApproxTlDebts(rows) {
+  function calculateApproxTlDebts(rows, settlements = []) {
     const net = new Map();
     const missing = new Set();
 
@@ -571,6 +787,18 @@
       ids.forEach((id, i) => add(id, -(base + (i < rem ? 1 : 0))));
     });
 
+    // Settlement harcama değildir. Yalnız kişilerin net borç/alacak pozisyonunu değiştirir.
+    settlements.forEach((x) => {
+      const rate = rateFor(x.currency);
+      if (!rate) {
+        missing.add(x.currency);
+        return;
+      }
+      const total = toMinor(Number(x.amount) * rate, "TL");
+      add(x.from_user_id, total);
+      add(x.to_user_id, -total);
+    });
+
     const debtors = [...net.entries()]
       .filter(([, v]) => v < 0)
       .map(([id, v]) => ({ id, amt: -v }))
@@ -594,8 +822,8 @@
     return { debts, missing };
   }
 
-  function renderApproxDebtCards(rows) {
-    const { debts, missing } = calculateApproxTlDebts(rows);
+  function renderApproxDebtCards(rows, settlements = []) {
+    const { debts, missing } = calculateApproxTlDebts(rows, settlements);
     const grid = $("totalsGrid");
     const warning = $("approxDebtWarning");
 
@@ -615,8 +843,8 @@
         ? outgoing.map((d) => `<div class="total-line approx-debt-line"><span>${escapeHtml(profileName(d.creditor))}</span><strong>${formatApproxTl(fromMinor(d.minor, "TL"))}</strong></div>`).join("")
         : '<div class="approx-no-debt">Ödenecek yaklaşık borç yok</div>';
 
-      return `<div class="total-card approx-debt-card">
-        <div class="total-user">${escapeHtml(p.username)}</div>
+      return `<div class="total-card approx-debt-card ${p.is_active === false ? "inactive-profile-card" : ""}">
+        <div class="total-user">${escapeHtml(p.username)}${p.is_active === false ? ' <span class="inactive-inline">Pasif</span>' : ""}</div>
         <div class="approx-card-caption">Kime yaklaşık ne kadar ödeyecek?</div>
         ${lines}
         <div class="approx-total-line"><span>Toplam Yaklaşık Borcu</span><strong>${formatApproxTl(fromMinor(totalMinor, "TL"))}</strong></div>
@@ -706,7 +934,7 @@
     net[currency].set(userId, (net[currency].get(userId) || 0) + delta);
   }
 
-  function renderDebts(rows) {
+  function renderDebts(rows, settlements = []) {
     const net = {};
     const provisionalCurrencies = new Set();
 
@@ -733,6 +961,14 @@
 
       addNet(net, currency, e.payer_id, total);
       ids.forEach((id, i) => addNet(net, currency, id, -(base + (i < rem ? 1 : 0))));
+    });
+
+    // Kişiler arası para transferi: gönderenin net pozisyonu artar, alanın azalır.
+    // Gezi harcamasına eklenmez fakat borcu kapatır / ters bakiye oluşturabilir.
+    settlements.forEach((x) => {
+      const total = toMinor(x.amount, x.currency);
+      addNet(net, x.currency, x.from_user_id, total);
+      addNet(net, x.currency, x.to_user_id, -total);
     });
 
     const debts = [];
@@ -861,6 +1097,188 @@
     }
   }
 
+  function openSettlementModal(settlementId) {
+    if (!canManageSettlement(settlementId)) return;
+    const x = currentSettlements.find((row) => row.settlement_id === settlementId);
+    if (!x || x.status !== "active") return;
+
+    $("editSettlementId").value = x.settlement_id;
+    $("editSettlementDate").value = x.spent_on;
+    $("editSettlementFrom").value = x.from_user_id;
+    $("editSettlementTo").value = x.to_user_id;
+    $("editSettlementAmount").value = x.amount;
+    $("editSettlementCurrency").value = x.currency;
+    $("editSettlementNote").value = x.note || "";
+    $("editSettlementReason").value = "";
+    $("settlementAuditInfo").textContent = `İlk kaydı giren: ${profileName(originalSettlementEnteredBy(x.settlement_id))} • Son revizyon: ${profileName(x.changed_by)}`;
+    clearMessage($("settlementEditMessage"));
+    $("settlementModal").classList.remove("hidden");
+  }
+
+  function closeSettlementModal() {
+    $("settlementModal").classList.add("hidden");
+    clearMessage($("settlementEditMessage"));
+  }
+
+  async function reviseSettlement(e) {
+    e.preventDefault();
+    const settlementId = $("editSettlementId").value;
+    if (!canManageSettlement(settlementId)) return;
+    if (!navigator.onLine) {
+      showMessage($("settlementEditMessage"), "warning", "İnternet bağlantısı yok. Değişiklik kaydedilmedi.");
+      return;
+    }
+
+    const fromId = $("editSettlementFrom").value;
+    const toId = $("editSettlementTo").value;
+    const amount = Number($("editSettlementAmount").value);
+    if (!fromId || !toId || fromId === toId) {
+      showMessage($("settlementEditMessage"), "error", "Gönderen ve alan farklı kişiler olmalı.");
+      return;
+    }
+    if (!Number.isFinite(amount) || amount <= 0) {
+      showMessage($("settlementEditMessage"), "error", "Tutar sıfırdan büyük olmalı.");
+      return;
+    }
+
+    try {
+      const { error } = await client.rpc("revise_settlement", {
+        p_settlement_id: settlementId,
+        p_from_user_id: fromId,
+        p_to_user_id: toId,
+        p_amount: amount,
+        p_currency: $("editSettlementCurrency").value,
+        p_spent_on: $("editSettlementDate").value,
+        p_note: $("editSettlementNote").value.trim() || null,
+        p_change_reason: $("editSettlementReason").value.trim() || null
+      });
+      if (error) throw error;
+      await loadBaseData();
+      closeSettlementModal();
+      showToast("Borç ödemesi revize edildi. Eski sürüm korunuyor.");
+    } catch (err) {
+      showMessage($("settlementEditMessage"), "error", isNetworkLikeError(err) ? "Güncelleme yapılamadı. Bağlantıyı kontrol et." : err.message);
+    }
+  }
+
+  async function voidSettlement() {
+    const settlementId = $("editSettlementId").value;
+    if (!canManageSettlement(settlementId)) return;
+    if (!navigator.onLine) {
+      showMessage($("settlementEditMessage"), "warning", "İnternet bağlantısı yok. Transfer iptal edilmedi.");
+      return;
+    }
+    if (!confirm("Bu borç ödemesi aktif borç hesabından çıkarılsın mı? Eski kayıt silinmeyecek.")) return;
+
+    try {
+      const { error } = await client.rpc("void_settlement", {
+        p_settlement_id: settlementId,
+        p_change_reason: $("editSettlementReason").value.trim() || "Kayıt sahibi/admin tarafından iptal edildi"
+      });
+      if (error) throw error;
+      await loadBaseData();
+      closeSettlementModal();
+      showToast("Borç ödemesi iptal edildi; geçmiş kayıt korunuyor.");
+    } catch (err) {
+      showMessage($("settlementEditMessage"), "error", err.message);
+    }
+  }
+
+  async function edgeFunctionErrorMessage(error, fallback = "Edge Function işlemi başarısız.") {
+    try {
+      if (error?.context && typeof error.context.json === "function") {
+        const payload = await error.context.json();
+        if (payload?.error) return String(payload.error);
+        if (payload?.message) return String(payload.message);
+      }
+    } catch (_) {}
+
+    const raw = String(error?.message || "");
+    if (/404|not found/i.test(raw)) return "Edge Function 'admin-users' bulunamadı. v3.11 Edge Function kurulumu yapılmalı.";
+    if (/invalid jwt|missing authorization|401/i.test(raw)) return "Admin oturumu doğrulanamadı. Çıkış yapıp tekrar giriş yap ve Edge Function JWT ayarını kontrol et.";
+    if (isNetworkLikeError(error)) return "İşlem yapılamadı. İnternet bağlantısını kontrol et.";
+    return raw || fallback;
+  }
+
+  async function invokeAdminUsers(payload) {
+    const { data, error } = await client.functions.invoke("admin-users", { body: payload });
+    if (error) throw new Error(await edgeFunctionErrorMessage(error));
+    if (!data?.ok) throw new Error(data?.error || "Admin işlemi başarısız.");
+    return data;
+  }
+
+  function renderAdminUsers() {
+    if (!currentProfile?.is_admin || !$("adminUserList")) return;
+    $("adminUserList").innerHTML = allProfiles.map((p) => {
+      const active = p.is_active !== false;
+      const disabled = p.is_admin || p.id === currentProfile.id;
+      return `<div class="admin-user-row ${active ? "" : "is-inactive"}">
+        <div class="admin-user-main">
+          <strong>${escapeHtml(p.username)}</strong>
+          <span>@${escapeHtml(p.login_name || "—")} • ${p.is_admin ? "Admin" : (active ? "Aktif" : "Pasif")}</span>
+        </div>
+        <button class="${active ? "danger" : "secondary"} admin-user-toggle" type="button" data-user-id="${p.id}" data-active="${active ? "1" : "0"}" ${disabled ? "disabled" : ""}>${active ? "Pasife Al" : "Aktifleştir"}</button>
+      </div>`;
+    }).join("");
+
+    $("adminUserList").querySelectorAll(".admin-user-toggle:not([disabled])").forEach((btn) => {
+      btn.addEventListener("click", () => setUserActive(btn.dataset.userId, btn.dataset.active !== "1"));
+    });
+  }
+
+  async function createUser(e) {
+    e.preventDefault();
+    clearMessage($("createUserMessage"));
+    if (!currentProfile?.is_admin) return;
+    if (!navigator.onLine) {
+      showMessage($("createUserMessage"), "warning", "İnternet bağlantısı yok. Kullanıcı oluşturulamadı.");
+      return;
+    }
+
+    const username = $("adminCreateUsername").value.trim();
+    const password = $("adminCreatePassword").value;
+    if (username.length < 2) {
+      showMessage($("createUserMessage"), "error", "Kullanıcı adı en az 2 karakter olmalı.");
+      return;
+    }
+    if (password.length < 8) {
+      showMessage($("createUserMessage"), "error", "Geçici şifre en az 8 karakter olmalı.");
+      return;
+    }
+
+    const btn = $("adminCreateUserBtn");
+    btn.disabled = true;
+    btn.textContent = "Oluşturuluyor…";
+    try {
+      const data = await invokeAdminUsers({ action: "create_user", username, password });
+      $("adminCreateUsername").value = "";
+      $("adminCreatePassword").value = "";
+      await loadBaseData();
+      showMessage($("createUserMessage"), "success", `✓ ${data.user?.username || username} oluşturuldu. Giriş adı: ${data.user?.login_name || normalizeLoginName(username)}`);
+    } catch (err) {
+      showMessage($("createUserMessage"), "error", err.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Kullanıcı Oluştur";
+    }
+  }
+
+  async function setUserActive(userId, active) {
+    clearMessage($("userStatusMessage"));
+    if (!currentProfile?.is_admin) return;
+    const target = allProfiles.find((p) => p.id === userId);
+    if (!target) return;
+    if (!active && !confirm(`${target.username} pasife alınsın mı? Mevcut harcama geçmişi silinmeyecek.`)) return;
+
+    try {
+      const data = await invokeAdminUsers({ action: "set_active", target_user_id: userId, active });
+      await loadBaseData();
+      showMessage($("userStatusMessage"), "success", `✓ ${data.username || target.username} ${active ? "aktifleştirildi" : "pasife alındı"}.`);
+    } catch (err) {
+      showMessage($("userStatusMessage"), "error", err.message);
+    }
+  }
+
   async function changeUserPassword(e) {
     e.preventDefault();
     clearMessage($("passwordMessage"));
@@ -873,6 +1291,10 @@
     const targetUserId = $("adminPasswordUser").value;
     const p1 = $("adminNewPassword").value;
     const p2 = $("adminNewPasswordConfirm").value;
+    if (!targetUserId) {
+      showMessage($("passwordMessage"), "error", "Kullanıcı seç.");
+      return;
+    }
     if (p1.length < 8) {
       showMessage($("passwordMessage"), "error", "Yeni şifre en az 8 karakter olmalı.");
       return;
@@ -887,23 +1309,12 @@
     btn.textContent = "Değiştiriliyor…";
 
     try {
-      const { data, error } = await client.functions.invoke("admin-set-password", {
-        body: { target_user_id: targetUserId, new_password: p1 }
-      });
-      if (error) throw error;
-      if (!data?.ok) throw new Error(data?.error || "Şifre değiştirilemedi.");
+      const data = await invokeAdminUsers({ action: "set_password", target_user_id: targetUserId, new_password: p1 });
       $("adminNewPassword").value = "";
       $("adminNewPasswordConfirm").value = "";
       showMessage($("passwordMessage"), "success", `✓ ${data.username || "Kullanıcı"} şifresi değiştirildi.`);
     } catch (err) {
-      const msg = String(err?.message || "");
-      showMessage(
-        $("passwordMessage"),
-        "error",
-        msg.includes("FunctionsHttpError") || msg.includes("404")
-          ? "Şifre değiştirme fonksiyonu henüz kurulmamış. Supabase Edge Function 'admin-set-password' kurulmalı."
-          : (isNetworkLikeError(err) ? "Şifre değiştirilemedi. Bağlantıyı kontrol et." : msg)
-      );
+      showMessage($("passwordMessage"), "error", err.message || "Şifre değiştirilemedi.");
     } finally {
       btn.disabled = false;
       btn.textContent = "Şifreyi Değiştir";
@@ -922,7 +1333,13 @@
 
   function downloadFullBackup() {
     if (!currentProfile?.is_admin) return;
-    const payload = { exported_at: new Date().toISOString(), profiles: allProfiles, expense_versions: allVersions, display_rates: displayRateRows };
+    const payload = {
+      exported_at: new Date().toISOString(),
+      profiles: allProfiles,
+      expense_versions: allVersions,
+      settlement_versions: allSettlementVersions,
+      display_rates: displayRateRows
+    };
     downloadBlob(`tripsplit-backup-${localToday()}.json`, JSON.stringify(payload, null, 2), "application/json");
     showToast("Tam JSON yedeği indirildi.");
   }
@@ -934,20 +1351,20 @@
 
   function exportCsv() {
     if (!currentProfile?.is_admin) return;
-    const rows = activeExpenses();
-    const head = ["Harcama Tarihi", "Harcama Detay", "Harcama Tutar", "Harcama Para Birimi", "Harcama Kart/Cash", "Harcayan Kişi", "Kaydı Giren", "Borca Ortak Olanlar", "Kart TL Karşılığı"];
+    const expenses = activeExpenses();
+    const settlements = activeSettlements();
+    const head = ["Kayıt Tipi", "Tarih", "Detay / Not", "Tutar", "Para", "Ödeme", "Gönderen / Harcayan", "Alan", "Kaydı Giren", "Borca Ortak Olanlar", "Kart TL Karşılığı"];
     const lines = [
       head.map(csvCell).join(","),
-      ...rows.map((e) => [
-        e.spent_on,
-        e.description,
-        e.amount,
-        e.currency,
-        e.payment_type,
-        profileName(e.payer_id),
-        profileName(originalEnteredBy(e.expense_id)),
-        e.participant_ids.map(profileName).join(" | "),
-        e.card_tl_amount || ""
+      ...expenses.map((e) => [
+        "Harcama", e.spent_on, e.description, e.amount, e.currency, e.payment_type,
+        profileName(e.payer_id), "", profileName(originalEnteredBy(e.expense_id)),
+        e.participant_ids.map(profileName).join(" | "), e.card_tl_amount || ""
+      ].map(csvCell).join(",")),
+      ...settlements.map((x) => [
+        "Borç Ödemesi", x.spent_on, x.note || "", x.amount, x.currency, "",
+        profileName(x.from_user_id), profileName(x.to_user_id), profileName(originalSettlementEnteredBy(x.settlement_id)),
+        "", ""
       ].map(csvCell).join(","))
     ];
     downloadBlob(`tripsplit-${localToday()}.csv`, `\uFEFF${lines.join("\n")}`, "text/csv;charset=utf-8");
@@ -980,10 +1397,17 @@
     updateOnlineState();
 
     $("authForm").addEventListener("submit", handleAuthSubmit);
+
+    $("showExpenseFormBtn").addEventListener("click", () => showEntryType("expense"));
+    $("showSettlementFormBtn").addEventListener("click", () => showEntryType("settlement"));
     $("expenseForm").addEventListener("submit", saveExpense);
+    $("settlementForm").addEventListener("submit", saveSettlement);
+
     $("expensePayer").addEventListener("change", () => rememberPayer($("expensePayer").value));
     $("expenseCurrency").addEventListener("change", () => rememberChoice("currency", $("expenseCurrency").value));
     $("expensePayment").addEventListener("change", () => rememberChoice("payment", $("expensePayment").value));
+    $("settlementFrom").addEventListener("change", () => rememberChoice("settlementFrom", $("settlementFrom").value));
+    $("settlementCurrency").addEventListener("change", () => rememberChoice("settlementCurrency", $("settlementCurrency").value));
     $("selectAllParticipants").addEventListener("click", () => document.querySelectorAll('input[data-scope="add"]').forEach((x) => x.checked = true));
 
     document.querySelectorAll(".nav-tab").forEach((t) => t.addEventListener("click", () => switchPage(t.dataset.page)));
@@ -1013,6 +1437,12 @@
     $("editPayment").addEventListener("change", toggleTlField);
     $("editCurrency").addEventListener("change", toggleTlField);
 
+    $("closeSettlementModal").addEventListener("click", closeSettlementModal);
+    $("settlementModal").addEventListener("click", (e) => { if (e.target === $("settlementModal")) closeSettlementModal(); });
+    $("settlementEditForm").addEventListener("submit", reviseSettlement);
+    $("voidSettlementBtn").addEventListener("click", voidSettlement);
+
+    $("createUserForm").addEventListener("submit", createUser);
     $("passwordAdminForm").addEventListener("submit", changeUserPassword);
     $("displayRatesForm").addEventListener("submit", saveDisplayRates);
     $("backupJsonBtn").addEventListener("click", downloadFullBackup);
