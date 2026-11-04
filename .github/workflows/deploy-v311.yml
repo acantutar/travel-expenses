@@ -1,0 +1,44 @@
+name: Deploy TripSplit v3.11 frontend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "deploy/v3.11.payload.b64"
+      - ".github/workflows/deploy-v311.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Decode v3.11 package
+        shell: bash
+        run: |
+          set -euo pipefail
+          base64 --decode deploy/v3.11.payload.b64 > /tmp/tripsplit-v3.11.zip
+          unzip -p /tmp/tripsplit-v3.11.zip travel-expenses-v3.11/index.html > index.html
+          unzip -p /tmp/tripsplit-v3.11.zip travel-expenses-v3.11/app.js > app.js
+          unzip -p /tmp/tripsplit-v3.11.zip travel-expenses-v3.11/styles.css > styles.css
+          node --check app.js
+          grep -q 'app.js?v=3.11' index.html
+          grep -q 'styles.css?v=3.11' index.html
+
+      - name: Commit frontend
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- index.html app.js styles.css; then
+            echo "No frontend changes."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html app.js styles.css
+          git commit -m "Deploy TripSplit v3.11 frontend"
+          git push
