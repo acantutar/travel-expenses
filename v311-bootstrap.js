@@ -27,7 +27,9 @@
 
   async function boot() {
     const cfg = window.APP_CONFIG || {};
-    if (!cfg.SUPABASE_URL || !cfg.SUPABASE_PUBLISHABLE_KEY) return;
+    if (!cfg.SUPABASE_URL || !cfg.SUPABASE_PUBLISHABLE_KEY) {
+      throw new Error("Supabase bağlantı ayarı eksik");
+    }
 
     if (!window.JSZip) await loadScript(JSZIP_URL);
 
@@ -38,10 +40,15 @@
     const zip = await window.JSZip.loadAsync(base64ToBytes(payload));
     const root = "travel-expenses-v3.11/";
 
+    const indexFile = zip.file(root + "index.html");
+    const appFile = zip.file(root + "app.js");
+    const cssFile = zip.file(root + "styles.css");
+    if (!indexFile || !appFile || !cssFile) throw new Error("v3.11 paket dosyaları eksik");
+
     const [html, app, css] = await Promise.all([
-      zip.file(root + "index.html").async("string"),
-      zip.file(root + "app.js").async("string"),
-      zip.file(root + "styles.css").async("string")
+      indexFile.async("string"),
+      appFile.async("string"),
+      cssFile.async("string")
     ]);
 
     const cssUrl = URL.createObjectURL(new Blob([css], { type: "text/css" }));
@@ -53,7 +60,7 @@
       AUTH_EMAIL_DOMAIN: cfg.AUTH_EMAIL_DOMAIN || "travel-expenses.app"
     }).replace(/</g, "\\u003c");
 
-    let next = html
+    const next = html
       .replace(/href="styles\.css\?v=3\.11"/, 'href="' + cssUrl + '"')
       .replace(/<script src="config\.js\?v=3\.11"><\/script>/, "<script>window.APP_CONFIG=" + safeCfg + ";<\/script>")
       .replace(/src="app\.js\?v=3\.11"/, 'src="' + appUrl + '"');
@@ -68,8 +75,8 @@
     const el = document.getElementById("authMessage");
     if (el) {
       el.className = "message error";
+      el.style.display = "block";
       el.textContent = "v3.11 yüklenemedi: " + (err?.message || err);
-      el.classList.remove("hidden");
     }
   });
 })();
