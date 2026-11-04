@@ -14,6 +14,23 @@
   let currentUser = null;
   let currentProfile = null;
   let allProfiles = [];
+  let accountProfiles = [];
+  let availableTrips = [];
+  let currentTripId = null;
+  let tripMembers = [];
+  let currentTripRole = null;
+
+  function isTripManager() {
+    return currentTripRole === "owner" || currentTripRole === "admin";
+  }
+
+  function tripStorageKey() {
+    return currentProfile?.id ? `tripSplitLastTrip:${currentProfile.id}` : null;
+  }
+
+  function currentTrip() {
+    return availableTrips.find((t) => t.id === currentTripId) || null;
+  }
   let allVersions = [];
   let currentExpenses = [];
   let allSettlementVersions = [];
@@ -84,7 +101,8 @@
   }
 
   function activeProfiles() {
-    return allProfiles.filter((p) => p.is_active !== false);
+    const ids = new Set(tripMembers.filter((m) => m.is_active).map((m) => m.user_id));
+    return allProfiles.filter((p) => p.is_active !== false && ids.has(p.id));
   }
 
   function formatAmount(v, c) {
@@ -105,7 +123,7 @@
   }
 
   function lastPayerStorageKey() {
-    return currentProfile?.id ? `tripSplitLastPayer:${currentProfile.id}` : null;
+    return currentProfile?.id ? `tripSplitLastPayer:${currentProfile.id}:${currentTripId}` : null;
   }
 
   function getRememberedPayer() {
@@ -125,7 +143,7 @@
   }
 
   function choiceStorageKey(name) {
-    return currentProfile?.id ? `tripSplitLastChoice:${currentProfile.id}:${name}` : null;
+    return currentProfile?.id ? `tripSplitLastChoice:${currentProfile.id}:${currentTripId}:${name}` : null;
   }
 
   function getRememberedChoice(name) {
@@ -150,7 +168,7 @@
   }
 
   function canManageExpense(expenseId) {
-    return Boolean(currentProfile && (currentProfile.is_admin || originalEnteredBy(expenseId) === currentProfile.id));
+    return Boolean(currentProfile && (isTripManager() || originalEnteredBy(expenseId) === currentProfile.id));
   }
 
   function originalSettlementEnteredBy(settlementId) {
@@ -159,7 +177,7 @@
   }
 
   function canManageSettlement(settlementId) {
-    return Boolean(currentProfile && (currentProfile.is_admin || originalSettlementEnteredBy(settlementId) === currentProfile.id));
+    return Boolean(currentProfile && (isTripManager() || originalSettlementEnteredBy(settlementId) === currentProfile.id));
   }
 
   function isNetworkLikeError(e) {
@@ -189,6 +207,8 @@
     try {
       localStorage.setItem("tripSplitMirrorV35", JSON.stringify({
         saved_at: new Date().toISOString(),
+        trip: currentTrip(),
+        trip_members: tripMembers,
         profiles: allProfiles,
         expense_versions: allVersions,
         settlement_versions: allSettlementVersions,
@@ -292,7 +312,6 @@
     $("accountUsername").textContent = data.username;
     $("accountRole").textContent = data.is_admin ? "Admin" : "Kullanıcı";
     $("adminAccountPanel").classList.toggle("hidden", !data.is_admin);
-    $("adminDateFilters").classList.toggle("hidden", !data.is_admin);
 
     const today = localToday();
     $("expenseDate").max = today;
@@ -310,9 +329,147 @@
     if (CURRENCIES.includes(rememberedSettlementCurrency)) $("settlementCurrency").value = rememberedSettlementCurrency;
 
     setScreen("app");
-    switchPage("add");
     showEntryType("expense");
+    await loadTrips();
+    switchPage(currentTripId ? "add" : "account");
     await loadBaseData();
+  }
+
+  function renderTripHeader() {
+    const select = $("tripSelect");
+    select.innerHTML = availableTrips.map((trip) => `<option value="${trip.id}">${escapeHtml(trip.name)}</option>`).join("");
+    select.value = currentTripId || "";
+    const trip = currentTrip();
+    $("currentTripName").textContent = trip ? trip.name : "Henüz gezin yok";
+    $("currentTripSub").textContent = trip?.destination || "Yeni bir gezi oluşturarak başlayabilirsin.";
+    $("tripNoMembership").classList.toggle("hidden", Boolean(trip));
+    $("appScreen").classList.toggle("no-trip", !trip);
+    select.disabled = !availableTrips.length;
+  }
+
+  async function loadTrips(preferredId = null) {
+    const { data, error } = await client.from("trips")
+      .select("id,name,destination,starts_on,ends_on,owner_id,created_at")
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    availableTrips = data || [];
+    let remembered = null;
+    try { remembered = localStorage.getItem(tripStorageKey()); } catch (_) {}
+    const wanted = [preferredId, currentTripId, remembered, availableTrips[0]?.id]
+      .find((id) => id && availableTrips.some((t) => t.id === id));
+    currentTripId = wanted || null;
+    if (currentTripId) {
+      try { localStorage.setItem(tripStorageKey(), currentTripId); } catch (_) {}
+    }
+    renderTripHeader();
+  }
+
+  async function switchTrip() {
+    const nextId = $("tripSelect").value;
+    if (!nextId || nextId === currentTripId) return;
+    const old = currentTripId;
+    $("tripSelect").disabled = true;
+    try {
+      currentTripId = nextId;
+      renderTripHeader();
+      clearFiltersWithoutRender();
+      await loadBaseData();
+      try { localStorage.setItem(tripStorageKey(), nextId); } catch (_) {}
+      switchPage("add");
+      showToast("Gezi değiştirildi.");
+    } catch (error) {
+      currentTripId = old;
+      renderTripHeader();
+      await loadBaseData().catch(() => undefined);
+      showToast(error?.message || "Gezi değiştirilemedi.");
+    } finally {
+      $("tripSelect").disabled = false;
+    }
+  }
+
+  function clearFiltersWithoutRender() {
+    ["filterStart", "filterEnd", "filterUser", "filterParticipant", "filterCurrency", "filterPayment"]
+      .forEach((id) => { if ($(id)) $(id).value = ""; });
+    reportDetailsExpanded = false;
+  }
+
+  async function createTrip(e) {
+    e.preventDefault();
+    clearMessage($("tripCreateMessage"));
+    const name = $("newTripName").value.trim();
+    const destination = $("newTripDestination").value.trim();
+    const starts = $("newTripStart").value || null;
+    const ends = $("newTripEnd").value || null;
+    if (starts && ends && starts > ends) {
+      showMessage($("tripCreateMessage"), "error", "Bitiş başlangıçtan önce olamaz.");
+      return;
+    }
+    if (!navigator.onLine) { showMessage($("tripCreateMessage"), "error", "İnternet bağlantısı gerekli."); return; }
+    const btn = $("saveNewTripBtn");
+    btn.disabled = true;
+    try {
+      const { data, error } = await client.rpc("create_trip", {
+        p_name: name, p_destination: destination, p_starts_on: starts, p_ends_on: ends
+      });
+      if (error) throw error;
+      currentTripId = null;
+      await loadTrips(data);
+      clearFiltersWithoutRender();
+      await loadBaseData();
+      $("tripCreateModal").classList.add("hidden");
+      $("newTripForm").reset();
+      switchPage("add");
+      showToast("Yeni gezi oluşturuldu. Üyeleri Hesabım'dan ekleyebilirsin.");
+    } catch (error) {
+      showMessage($("tripCreateMessage"), "error", error.message || "Gezi oluşturulamadı.");
+    } finally { btn.disabled = false; }
+  }
+
+  function renderTripMembers() {
+    const trip = currentTrip();
+    const manager = isTripManager();
+    $("tripMembersPanel").classList.toggle("hidden", !trip);
+    $("tripMemberManageTools").classList.toggle("hidden", !manager);
+    $("tripRatePanel").classList.toggle("hidden", !manager);
+    $("accountTripName").textContent = trip ? trip.name : "—";
+    $("accountTripRole").textContent = currentTripRole === "owner" ? "Gezi sahibi" : currentTripRole === "admin" ? "Gezi yöneticisi" : currentTripRole === "member" ? "Katılımcı" : "Üye değil";
+    $("tripMembersList").innerHTML = tripMembers.map((m) => {
+      const user = accountProfiles.find((p) => p.id === m.user_id);
+      const title = user?.username || "Eski katılımcı";
+      const label = m.role === "owner" ? "Sahip" : m.role === "admin" ? "Yönetici" : "Üye";
+      const action = manager && m.role !== "owner" && m.user_id !== currentProfile?.id
+        ? `<button type="button" class="secondary trip-member-toggle" data-user-id="${m.user_id}" data-active="${!m.is_active}">${m.is_active ? "Çıkar" : "Yeniden ekle"}</button>`
+        : "";
+      return `<div class="trip-member-row"><span>${escapeHtml(title)} <small>${label}${m.is_active ? "" : " · Çıkarılmış"}</small></span>${action}</div>`;
+    }).join("") || `<p class="muted">Üye yok.</p>`;
+    $("tripMembersList").querySelectorAll(".trip-member-toggle").forEach((btn) => btn.addEventListener("click", () => setTripMemberActive(btn.dataset.userId, btn.dataset.active === "true")));
+  }
+
+  async function addTripMember(e) {
+    e.preventDefault();
+    clearMessage($("tripMemberMessage"));
+    const login = normalizeLoginName($("tripAddLogin").value);
+    if (!currentTripId || !login) return;
+    try {
+      const { error } = await client.rpc("add_trip_member", { p_trip_id: currentTripId, p_login_name: login });
+      if (error) throw error;
+      $("tripAddLogin").value = "";
+      await loadBaseData();
+      showMessage($("tripMemberMessage"), "success", "✓ Kullanıcı geziye eklendi.");
+    } catch (error) { showMessage($("tripMemberMessage"), "error", error.message || "Üye eklenemedi."); }
+  }
+
+  async function setTripMemberActive(userId, isActive) {
+    if (!isTripManager() || !currentTripId || !userId) return;
+    if (!isActive && !confirm("Bu kişiyi geziden çıkaralım mı? Eski harcama geçmişi korunacak.")) return;
+    try {
+      const { error } = await client.rpc("set_trip_member_active", {
+        p_trip_id: currentTripId, p_user_id: userId, p_active: isActive
+      });
+      if (error) throw error;
+      await loadBaseData();
+      showToast(isActive ? "Katılımcı yeniden eklendi." : "Katılımcı geziden çıkarıldı.");
+    } catch (error) { showMessage($("tripMemberMessage"), "error", error.message || "Üye güncellenemedi."); }
   }
 
   async function loadBaseData() {
@@ -321,24 +478,47 @@
       return;
     }
 
-    const [pRes, vRes, sRes, rRes] = await Promise.all([
+    if (!currentTripId) {
+      allProfiles = [];
+      accountProfiles = [];
+      tripMembers = [];
+      currentTripRole = null;
+      allVersions = [];
+      currentExpenses = [];
+      allSettlementVersions = [];
+      currentSettlements = [];
+      displayRateRows = [];
+      renderTripHeader();
+      renderTripMembers();
+      return;
+    }
+    const selectedTrip = currentTripId;
+    const [mRes, pRes, vRes, sRes, rRes] = await Promise.all([
+      client.from("trip_members").select("trip_id,user_id,role,is_active,joined_at").eq("trip_id", selectedTrip),
       client.from("profiles").select("id,username,login_name,is_admin,is_active,created_at").order("username"),
-      client.from("expense_versions").select("*").order("created_at", { ascending: false }).limit(20000),
-      client.from("settlement_versions").select("*").order("created_at", { ascending: false }).limit(20000),
-      client.from("display_rates").select("currency,tl_rate,updated_at,updated_by").order("currency")
+      client.from("expense_versions").select("*").eq("trip_id", selectedTrip).order("created_at", { ascending: false }).limit(20000),
+      client.from("settlement_versions").select("*").eq("trip_id", selectedTrip).order("created_at", { ascending: false }).limit(20000),
+      client.from("trip_display_rates").select("currency,tl_rate,updated_at,updated_by").eq("trip_id", selectedTrip)
     ]);
 
+    if (selectedTrip !== currentTripId) return;
+    if (mRes.error) throw mRes.error;
     if (pRes.error) throw pRes.error;
     if (vRes.error) throw vRes.error;
     if (sRes.error) throw sRes.error;
+    if (rRes.error) throw rRes.error;
 
-    allProfiles = pRes.data || [];
+    tripMembers = mRes.data || [];
+    currentTripRole = tripMembers.find((m) => m.user_id === currentProfile?.id && m.is_active)?.role || null;
+    accountProfiles = pRes.data || [];
+    const memberIds = new Set(tripMembers.map((m) => m.user_id));
+    allProfiles = accountProfiles.filter((p) => memberIds.has(p.id));
     allVersions = vRes.data || [];
     currentExpenses = latestExpensesFromVersions(allVersions);
     allSettlementVersions = sRes.data || [];
     currentSettlements = latestSettlementsFromVersions(allSettlementVersions);
 
-    displayRateRows = rRes.error ? [] : (rRes.data || []);
+    displayRateRows = rRes.data || [];
     displayRates = { MYR: null, VND: null, USD: null, TL: 1 };
     displayRateRows.forEach((r) => {
       if (Object.prototype.hasOwnProperty.call(displayRates, r.currency) && r.tl_rate !== null) {
@@ -347,6 +527,9 @@
     });
 
     persistLocalMirror();
+    renderTripHeader();
+    renderTripMembers();
+    $("adminDateFilters").classList.toggle("hidden", !isTripManager());
     populateSelectors();
     renderParticipantPickers();
     renderDisplayRateAdmin();
@@ -376,7 +559,8 @@
 
     // Düzenle ekranında eski/pasif kişilerin tarihsel kaydı korunabilsin.
     $("editPayer").innerHTML = allUserOptions;
-    $("adminPasswordUser").innerHTML = allUserOptions;
+    $("adminPasswordUser").innerHTML = accountProfiles.map((p) =>
+      `<option value="${p.id}">${escapeHtml(p.username)}${p.is_active === false ? " (Pasif)" : ""}</option>`).join("");
 
     const rememberedSettlementFrom = getRememberedChoice("settlementFrom");
     const fromPreferred = [rememberedSettlementFrom, currentProfile?.id, actives[0]?.id].find((id) => id && actives.some((p) => p.id === id)) || "";
@@ -447,7 +631,9 @@
       if (!payerId || !allProfiles.some((p) => p.id === payerId)) throw new Error("Harcayan kişiyi seç.");
       rememberPayer(payerId);
 
-      const { error } = await client.rpc("create_expense", {
+      if (!currentTripId) throw new Error("Önce bir gezi seç.");
+      const { error } = await client.rpc("create_trip_expense", {
+        p_trip_id: currentTripId,
         p_payer_id: payerId,
         p_description: description,
         p_amount: amount,
@@ -505,7 +691,9 @@
     btn.disabled = true;
     btn.textContent = "Kaydediliyor…";
     try {
-      const { error } = await client.rpc("create_settlement", {
+      if (!currentTripId) throw new Error("Önce bir gezi seç.");
+      const { error } = await client.rpc("create_trip_settlement", {
+        p_trip_id: currentTripId,
         p_from_user_id: fromId,
         p_to_user_id: toId,
         p_amount: amount,
@@ -597,8 +785,8 @@
     const part = $("filterParticipant").value;
     const currency = $("filterCurrency").value;
     const payment = $("filterPayment").value;
-    const start = currentProfile?.is_admin ? $("filterStart").value : "";
-    const end = currentProfile?.is_admin ? $("filterEnd").value : "";
+    const start = isTripManager() ? $("filterStart").value : "";
+    const end = isTripManager() ? $("filterEnd").value : "";
 
     return activeExpenses().filter((e) => {
       if (user && e.payer_id !== user) return false;
@@ -616,8 +804,8 @@
     const part = $("filterParticipant").value;
     const currency = $("filterCurrency").value;
     const payment = $("filterPayment").value;
-    const start = currentProfile?.is_admin ? $("filterStart").value : "";
-    const end = currentProfile?.is_admin ? $("filterEnd").value : "";
+    const start = isTripManager() ? $("filterStart").value : "";
+    const end = isTripManager() ? $("filterEnd").value : "";
 
     return activeSettlements().filter((x) => {
       if (user && x.from_user_id !== user && x.to_user_id !== user) return false;
@@ -659,13 +847,13 @@
         ? (e.card_tl_amount ? `${formatAmount(e.card_tl_amount, "TL")} TL` : '<span class="status-provisional">Bekliyor</span>')
         : (e.currency === "TL" ? `${formatAmount(e.amount, "TL")} TL` : "—");
 
-      return `<tr data-id="${e.expense_id}" class="${currentProfile.is_admin ? "admin-clickable" : ""}">
+      return `<tr data-id="${e.expense_id}" class="${canManageExpense(e.expense_id) ? "admin-clickable" : ""}">
         <td>${formatDateOnly(e.spent_on)}</td>
         <td>${escapeHtml(e.description)}<span class="subtext">v${e.version_no}</span></td>
         <td class="number">${formatAmount(e.amount, e.currency)}</td>
         <td>${e.currency}</td>
         <td>${escapeHtml(e.payment_type)}</td>
-        <td>${escapeHtml(profileName(e.payer_id))}${currentProfile.is_admin ? `<span class="subtext">Giren: ${escapeHtml(profileName(originalEnteredBy(e.expense_id)))}</span>` : ""}</td>
+        <td>${escapeHtml(profileName(e.payer_id))}${isTripManager() ? `<span class="subtext">Giren: ${escapeHtml(profileName(originalEnteredBy(e.expense_id)))}</span>` : ""}</td>
         <td><div class="pill-list">${people}</div></td>
         <td>${tl}</td>
       </tr>`;
@@ -677,17 +865,15 @@
     renderTripApproxTotal(activeExpenses());
     renderDebts(rows, settlements);
 
-    if (currentProfile.is_admin) {
-      $("reportBody").querySelectorAll("tr[data-id]").forEach((r) => r.addEventListener("click", () => openAdminModal(r.dataset.id)));
-      $("settlementBody").querySelectorAll("tr[data-id]").forEach((r) => r.addEventListener("click", () => openSettlementModal(r.dataset.id)));
-    }
+    $("reportBody").querySelectorAll("tr.admin-clickable[data-id]").forEach((r) => r.addEventListener("click", () => openAdminModal(r.dataset.id)));
+    $("settlementBody").querySelectorAll("tr.admin-clickable[data-id]").forEach((r) => r.addEventListener("click", () => openSettlementModal(r.dataset.id)));
   }
 
   function renderSettlementTable(rows) {
     $("settlementCount").textContent = `${rows.length} kayıt`;
     $("settlementEmpty").classList.toggle("hidden", rows.length > 0);
     $("settlementBody").innerHTML = rows.map((x) => `
-      <tr data-id="${x.settlement_id}" class="${currentProfile?.is_admin ? "admin-clickable" : ""}">
+      <tr data-id="${x.settlement_id}" class="${canManageSettlement(x.settlement_id) ? "admin-clickable" : ""}">
         <td>${formatDateOnly(x.spent_on)}</td>
         <td>${escapeHtml(profileName(x.from_user_id))}</td>
         <td>${escapeHtml(profileName(x.to_user_id))}</td>
@@ -874,7 +1060,7 @@
   }
 
   function renderDisplayRateAdmin() {
-    if (!currentProfile?.is_admin) return;
+    if (!isTripManager()) return;
     ["MYR", "VND", "USD"].forEach((c) => {
       const el = $(`rate${c}`);
       if (el) el.value = displayRates[c] || "";
@@ -891,7 +1077,7 @@
   async function saveDisplayRates(e) {
     e.preventDefault();
     clearMessage($("displayRatesMessage"));
-    if (!currentProfile?.is_admin) return;
+    if (!isTripManager()) return;
     if (!navigator.onLine) {
       showMessage($("displayRatesMessage"), "warning", "İnternet bağlantısı yok. Kurlar kaydedilmedi.");
       return;
@@ -909,7 +1095,7 @@
     btn.disabled = true;
     btn.textContent = "Kaydediliyor…";
     try {
-      const { error } = await client.rpc("set_display_rates", { p_myr: myr, p_vnd: vnd, p_usd: usd });
+      const { error } = await client.rpc("set_trip_display_rates", { p_trip_id: currentTripId, p_myr: myr, p_vnd: vnd, p_usd: usd });
       if (error) throw error;
       await loadBaseData();
       showMessage($("displayRatesMessage"), "success", "✓ Yaklaşık TL kurları kaydedildi. Harcama kayıtları değiştirilmedi.");
@@ -1016,7 +1202,7 @@
     $("editPayment").value = e.payment_type;
     $("editPayer").value = e.payer_id;
     const enteredBy = originalEnteredBy(e.expense_id);
-    $("editModalEyebrow").textContent = currentProfile.is_admin && enteredBy !== currentProfile.id ? "Admin Düzenleme" : "Kendi Kaydın";
+    $("editModalEyebrow").textContent = isTripManager() && enteredBy !== currentProfile.id ? "Admin Düzenleme" : "Kendi Kaydın";
     $("editAuditInfo").textContent = `İlk kaydı giren: ${profileName(enteredBy)} • Son revizyon: ${profileName(e.changed_by)}`;
     $("editCardTl").value = e.card_tl_amount || "";
     $("editReason").value = "";
@@ -1209,7 +1395,7 @@
 
   function renderAdminUsers() {
     if (!currentProfile?.is_admin || !$("adminUserList")) return;
-    $("adminUserList").innerHTML = allProfiles.map((p) => {
+    $("adminUserList").innerHTML = accountProfiles.map((p) => {
       const active = p.is_active !== false;
       const disabled = p.is_admin || p.id === currentProfile.id;
       return `<div class="admin-user-row ${active ? "" : "is-inactive"}">
@@ -1266,7 +1452,7 @@
   async function setUserActive(userId, active) {
     clearMessage($("userStatusMessage"));
     if (!currentProfile?.is_admin) return;
-    const target = allProfiles.find((p) => p.id === userId);
+    const target = accountProfiles.find((p) => p.id === userId);
     if (!target) return;
     if (!active && !confirm(`${target.username} pasife alınsın mı? Mevcut harcama geçmişi silinmeyecek.`)) return;
 
@@ -1335,6 +1521,10 @@
     if (!currentProfile?.is_admin) return;
     const payload = {
       exported_at: new Date().toISOString(),
+      selected_trip: currentTrip(),
+      trip_members: tripMembers,
+      selected_trip: currentTrip(),
+      trip_members: tripMembers,
       profiles: allProfiles,
       expense_versions: allVersions,
       settlement_versions: allSettlementVersions,
@@ -1397,6 +1587,13 @@
     updateOnlineState();
 
     $("authForm").addEventListener("submit", handleAuthSubmit);
+    $("tripSelect").addEventListener("change", switchTrip);
+    $("newTripBtn").addEventListener("click", () => { clearMessage($("tripCreateMessage")); $("tripCreateModal").classList.remove("hidden"); });
+    $("tripEmptyCreateBtn").addEventListener("click", () => { clearMessage($("tripCreateMessage")); $("tripCreateModal").classList.remove("hidden"); });
+    $("closeTripCreateModal").addEventListener("click", () => $("tripCreateModal").classList.add("hidden"));
+    $("tripCreateModal").addEventListener("click", (e) => { if (e.target === $("tripCreateModal")) $("tripCreateModal").classList.add("hidden"); });
+    $("newTripForm").addEventListener("submit", createTrip);
+    $("tripAddMemberForm").addEventListener("submit", addTripMember);
 
     $("showExpenseFormBtn").addEventListener("click", () => showEntryType("expense"));
     $("showSettlementFormBtn").addEventListener("click", () => showEntryType("settlement"));
