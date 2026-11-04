@@ -260,8 +260,8 @@
 
   function formatAmount(v, c) {
     return new Intl.NumberFormat("tr-TR", {
-      minimumFractionDigits: DECIMALS[c] ?? 2,
-      maximumFractionDigits: DECIMALS[c] ?? 2
+      minimumFractionDigits: currencyDigits(c),
+      maximumFractionDigits: currencyDigits(c)
     }).format(Number(v || 0));
   }
 
@@ -529,6 +529,7 @@
       auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false }
     });
     await loadCurrencyCatalog();
+    setupNewTripCurrencyForm();
 
     try {
       const rememberedLogin = localStorage.getItem("tripSplitLastLogin");
@@ -583,7 +584,7 @@
         "error",
         isNetworkLikeError(err)
           ? "Giriş yapılamadı. İnternet bağlantısını kontrol et."
-          : (inactive ? "Bu kullanıcı hesabı pasif durumda. Admin ile iletişime geç." : "Kullanıcı adı veya şifre hatalı.")
+          : (inactive ? "Bu kullanıcı hesabı pasif durumda." : "Kullanıcı adı veya şifre hatalı.")
       );
     } finally {
       btn.disabled = false;
@@ -1421,11 +1422,11 @@
   }
 
   function toMinor(amount, currency) {
-    return Math.round(Number(amount) * Math.pow(10, DECIMALS[currency] ?? 2));
+    return Math.round(Number(amount) * Math.pow(10, currencyDigits(currency)));
   }
 
   function fromMinor(minor, currency) {
-    return minor / Math.pow(10, DECIMALS[currency] ?? 2);
+    return minor / Math.pow(10, currencyDigits(currency));
   }
 
   function addNet(net, currency, userId, delta) {
