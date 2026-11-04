@@ -528,6 +528,7 @@
     client = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_PUBLISHABLE_KEY, {
       auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false }
     });
+    await loadCurrencyCatalog();
 
     try {
       const rememberedLogin = localStorage.getItem("tripSplitLastLogin");
@@ -614,8 +615,7 @@
     currentProfile = data;
     $("userChip").textContent = data.username;
     $("accountUsername").textContent = data.username;
-    $("accountRole").textContent = data.is_admin ? "Admin" : "Kullanıcı";
-    $("adminAccountPanel").classList.toggle("hidden", !data.is_admin);
+    await loadPersonalCurrencyFavorites();
 
     const today = localToday();
     $("expenseDate").max = today;
@@ -671,6 +671,7 @@
       try { localStorage.setItem(tripStorageKey(), currentTripId); } catch (_) {}
     }
     renderTripHeader();
+    $("accountTripCount").textContent=String(availableTrips.length);
   }
 
   async function switchTrip() {
@@ -850,7 +851,7 @@
     populateSelectors();
     renderParticipantPickers();
     renderDisplayRateAdmin();
-    renderAdminUsers();
+    renderPersonalFavorites();
     renderReport();
     renderMyEntries();
     refreshTripInvites().catch((err) => showMessage($("inviteManageMessage"),"error",err.message));
@@ -878,8 +879,7 @@
 
     // Düzenle ekranında eski/pasif kişilerin tarihsel kaydı korunabilsin.
     $("editPayer").innerHTML = allUserOptions;
-    $("adminPasswordUser").innerHTML = accountProfiles.map((p) =>
-      `<option value="${p.id}">${escapeHtml(p.username)}${p.is_active === false ? " (Pasif)" : ""}</option>`).join("");
+
 
     const rememberedSettlementFrom = getRememberedChoice("settlementFrom");
     const fromPreferred = [rememberedSettlementFrom, currentProfile?.id, actives[0]?.id].find((id) => id && actives.some((p) => p.id === id)) || "";
@@ -1700,125 +1700,30 @@
     return raw || fallback;
   }
 
-  async function invokeAdminUsers(payload) {
-    const { data, error } = await client.functions.invoke("admin-users", { body: payload });
-    if (error) throw new Error(await edgeFunctionErrorMessage(error));
-    if (!data?.ok) throw new Error(data?.error || "Admin işlemi başarısız.");
-    return data;
-  }
-
-  function renderAdminUsers() {
-    if (!currentProfile?.is_admin || !$("adminUserList")) return;
-    $("adminUserList").innerHTML = accountProfiles.map((p) => {
-      const active = p.is_active !== false;
-      const disabled = p.is_admin || p.id === currentProfile.id;
-      return `<div class="admin-user-row ${active ? "" : "is-inactive"}">
-        <div class="admin-user-main">
-          <strong>${escapeHtml(p.username)}</strong>
-          <span>@${escapeHtml(p.login_name || "—")} • ${p.is_admin ? "Admin" : (active ? "Aktif" : "Pasif")}</span>
-        </div>
-        <button class="${active ? "danger" : "secondary"} admin-user-toggle" type="button" data-user-id="${p.id}" data-active="${active ? "1" : "0"}" ${disabled ? "disabled" : ""}>${active ? "Pasife Al" : "Aktifleştir"}</button>
-      </div>`;
-    }).join("");
-
-    $("adminUserList").querySelectorAll(".admin-user-toggle:not([disabled])").forEach((btn) => {
-      btn.addEventListener("click", () => setUserActive(btn.dataset.userId, btn.dataset.active !== "1"));
-    });
-  }
-
-  async function createUser(e) {
+  async function changeOwnPassword(e) {
     e.preventDefault();
-    clearMessage($("createUserMessage"));
-    if (!currentProfile?.is_admin) return;
-    if (!navigator.onLine) {
-      showMessage($("createUserMessage"), "warning", "İnternet bağlantısı yok. Kullanıcı oluşturulamadı.");
+    clearMessage($("selfPasswordMessage"));
+    const password=$("selfNewPassword").value;
+    const confirmation=$("selfNewPasswordRepeat").value;
+    if(password.length<10 || !/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
+      showMessage($("selfPasswordMessage"),"error","Şifre en az 10 karakter, bir harf ve bir rakam içermeli.");
       return;
     }
-
-    const username = $("adminCreateUsername").value.trim();
-    const password = $("adminCreatePassword").value;
-    if (username.length < 2) {
-      showMessage($("createUserMessage"), "error", "Kullanıcı adı en az 2 karakter olmalı.");
+    if(password!==confirmation) {
+      showMessage($("selfPasswordMessage"),"error","Şifreler aynı değil.");
       return;
     }
-    if (password.length < 8) {
-      showMessage($("createUserMessage"), "error", "Geçici şifre en az 8 karakter olmalı.");
-      return;
-    }
-
-    const btn = $("adminCreateUserBtn");
-    btn.disabled = true;
-    btn.textContent = "Oluşturuluyor…";
+    const btn=$("selfPasswordSave");
+    btn.disabled=true;
     try {
-      const data = await invokeAdminUsers({ action: "create_user", username, password });
-      $("adminCreateUsername").value = "";
-      $("adminCreatePassword").value = "";
-      await loadBaseData();
-      showMessage($("createUserMessage"), "success", `✓ ${data.user?.username || username} oluşturuldu. Giriş adı: ${data.user?.login_name || normalizeLoginName(username)}`);
-    } catch (err) {
-      showMessage($("createUserMessage"), "error", err.message);
-    } finally {
-      btn.disabled = false;
-      btn.textContent = "Kullanıcı Oluştur";
-    }
-  }
-
-  async function setUserActive(userId, active) {
-    clearMessage($("userStatusMessage"));
-    if (!currentProfile?.is_admin) return;
-    const target = accountProfiles.find((p) => p.id === userId);
-    if (!target) return;
-    if (!active && !confirm(`${target.username} pasife alınsın mı? Mevcut harcama geçmişi silinmeyecek.`)) return;
-
-    try {
-      const data = await invokeAdminUsers({ action: "set_active", target_user_id: userId, active });
-      await loadBaseData();
-      showMessage($("userStatusMessage"), "success", `✓ ${data.username || target.username} ${active ? "aktifleştirildi" : "pasife alındı"}.`);
-    } catch (err) {
-      showMessage($("userStatusMessage"), "error", err.message);
-    }
-  }
-
-  async function changeUserPassword(e) {
-    e.preventDefault();
-    clearMessage($("passwordMessage"));
-    if (!currentProfile?.is_admin) return;
-    if (!navigator.onLine) {
-      showMessage($("passwordMessage"), "warning", "İnternet bağlantısı yok. Şifre değiştirilemedi.");
-      return;
-    }
-
-    const targetUserId = $("adminPasswordUser").value;
-    const p1 = $("adminNewPassword").value;
-    const p2 = $("adminNewPasswordConfirm").value;
-    if (!targetUserId) {
-      showMessage($("passwordMessage"), "error", "Kullanıcı seç.");
-      return;
-    }
-    if (p1.length < 8) {
-      showMessage($("passwordMessage"), "error", "Yeni şifre en az 8 karakter olmalı.");
-      return;
-    }
-    if (p1 !== p2) {
-      showMessage($("passwordMessage"), "error", "Yeni şifreler aynı değil.");
-      return;
-    }
-
-    const btn = $("adminPasswordBtn");
-    btn.disabled = true;
-    btn.textContent = "Değiştiriliyor…";
-
-    try {
-      const data = await invokeAdminUsers({ action: "set_password", target_user_id: targetUserId, new_password: p1 });
-      $("adminNewPassword").value = "";
-      $("adminNewPasswordConfirm").value = "";
-      showMessage($("passwordMessage"), "success", `✓ ${data.username || "Kullanıcı"} şifresi değiştirildi.`);
-    } catch (err) {
-      showMessage($("passwordMessage"), "error", err.message || "Şifre değiştirilemedi.");
-    } finally {
-      btn.disabled = false;
-      btn.textContent = "Şifreyi Değiştir";
-    }
+      const {error}=await client.auth.updateUser({password});
+      if(error)throw error;
+      $("selfNewPassword").value="";
+      $("selfNewPasswordRepeat").value="";
+      showMessage($("selfPasswordMessage"),"success","Şifren güncellendi.");
+    } catch(err) {
+      showMessage($("selfPasswordMessage"),"error",err.message||"Şifre güncellenemedi.");
+    } finally {btn.disabled=false;}
   }
 
   function downloadBlob(name, text, type) {
@@ -1832,7 +1737,7 @@
   }
 
   function downloadFullBackup() {
-    if (!currentProfile?.is_admin) return;
+    if (!currentProfile || !currentTripId) return;
     const payload = {
       exported_at: new Date().toISOString(),
       selected_trip: currentTrip(),
@@ -1852,7 +1757,7 @@
   }
 
   function exportCsv() {
-    if (!currentProfile?.is_admin) return;
+    if (!currentProfile || !currentTripId) return;
     const expenses = activeExpenses();
     const settlements = activeSettlements();
     const head = ["Kayıt Tipi", "Tarih", "Detay / Not", "Tutar", "Para", "Ödeme", "Gönderen / Harcayan", "Alan", "Kaydı Giren", "Borca Ortak Olanlar", "Kart TL Karşılığı"];
@@ -1958,19 +1863,19 @@
     $("settlementEditForm").addEventListener("submit", reviseSettlement);
     $("voidSettlementBtn").addEventListener("click", voidSettlement);
 
-    $("createUserForm").addEventListener("submit", createUser);
-    $("passwordAdminForm").addEventListener("submit", changeUserPassword);
+    $("selfPasswordForm").addEventListener("submit", changeOwnPassword);
+    $("addFavoriteCurrencyBtn").addEventListener("click",()=>{
+      changeFavoriteCurrency($("favoriteCurrencySelect").value,true);
+    });
     $("displayRatesForm").addEventListener("submit", saveDisplayRates);
     $("tripCurrencySettingsForm").addEventListener("submit", saveTripCurrencySettings);
     $("newTripBaseCurrency").addEventListener("change",()=> {
-      const base=$("newTripBaseCurrency").value;
-      const choice=$("newTripCurrencyChoices").querySelector(`input[value="${base}"]`);
-      if(choice)choice.checked=true;
+      currencySelectionState.newTripCurrencyChoices.add($("newTripBaseCurrency").value);
+      renderCurrencyChoiceOptions("newTripCurrencyChoices");
     });
     $("tripBaseCurrencySettings").addEventListener("change",()=> {
-      const base=$("tripBaseCurrencySettings").value;
-      const choice=$("tripAllowedCurrencyChoices").querySelector(`input[value="${base}"]`);
-      if(choice)choice.checked=true;
+      currencySelectionState.tripAllowedCurrencyChoices.add($("tripBaseCurrencySettings").value);
+      renderCurrencyChoiceOptions("tripAllowedCurrencyChoices");
     });
     $("backupJsonBtn").addEventListener("click", downloadFullBackup);
     $("exportCsvBtn").addEventListener("click", exportCsv);
