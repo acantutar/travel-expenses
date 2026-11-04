@@ -5,11 +5,17 @@ on:
   push:
     branches: [main]
     paths:
-      - "deploy/v3.11.payload.b64"
+      - "deploy/v311-xz.part1"
+      - "deploy/v311-xz.part2"
+      - "deploy/v311-xz.part3"
       - ".github/workflows/deploy-v311.yml"
 
 permissions:
   contents: write
+
+concurrency:
+  group: tripsplit-v311-deploy
+  cancel-in-progress: false
 
 jobs:
   deploy:
@@ -17,29 +23,46 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+          fetch-depth: 0
 
-      - name: Decode v3.11 package
+      - name: Restore v3.10 frontend baseline
         shell: bash
         run: |
           set -euo pipefail
-          base64 --decode deploy/v3.11.payload.b64 > /tmp/tripsplit-v3.11.zip
-          unzip -p /tmp/tripsplit-v3.11.zip travel-expenses-v3.11/index.html > index.html
-          unzip -p /tmp/tripsplit-v3.11.zip travel-expenses-v3.11/app.js > app.js
-          unzip -p /tmp/tripsplit-v3.11.zip travel-expenses-v3.11/styles.css > styles.css
+          BASE=56dd77e77f1273d6f5e848f3ae7d0ba2412df9ae
+          for file in index.html app.js styles.css config.js; do
+            git show "$BASE:$file" > "$file"
+          done
+
+      - name: Validate and apply v3.11 source patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat deploy/v311-xz.part1 deploy/v311-xz.part2 deploy/v311-xz.part3 | base64 --decode | xz --decompress --stdout > /tmp/tripsplit-v311.patch
+          echo "cd78b6f86c62535aae3e29032730755f01c15c0c48a37dd1295e535b8914ab3f  /tmp/tripsplit-v311.patch" | sha256sum --check
+          patch --batch --fuzz=0 -p0 < /tmp/tripsplit-v311.patch
           node --check app.js
-          grep -q 'app.js?v=3.11' index.html
-          grep -q 'styles.css?v=3.11' index.html
+          grep -Fq 'app.js?v=3.11' index.html
+          grep -Fq 'styles.css?v=3.11' index.html
+          grep -Fq 'function latestSettlementsFromVersions' app.js
+          grep -Fq 'admin-users' app.js
+          grep -Fq 'settlement_versions' app.js
+          test -s index.html
+          test -s app.js
+          test -s styles.css
 
-      - name: Commit frontend
+      - name: Commit v3.11 source files
         shell: bash
         run: |
           set -euo pipefail
-          if git diff --quiet -- index.html app.js styles.css; then
-            echo "No frontend changes."
-            exit 0
-          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add index.html app.js styles.css
-          git commit -m "Deploy TripSplit v3.11 frontend"
-          git push
+          git add index.html app.js styles.css config.js
+          if git diff --cached --quiet; then
+            echo "No changes to publish"
+            exit 0
+          fi
+          git commit -m "Deploy TripSplit v3.11 source files"
+          git push origin HEAD:main
