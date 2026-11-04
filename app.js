@@ -19,6 +19,8 @@
   let currentTripId = null;
   let tripMembers = [];
   let currentTripRole = null;
+  let pendingInviteToken = null;
+  let pendingInviteDetails = null;
 
   function isTripManager() {
     return currentTripRole === "owner" || currentTripRole === "admin";
@@ -217,6 +219,155 @@
     } catch (_) {}
   }
 
+  function readInviteLink() {
+    const urlToken = new URLSearchParams(location.hash.replace(/^#/, "")).get("invite");
+    if (urlToken && /^[a-f0-9]{64}$/.test(urlToken)) {
+      pendingInviteToken = urlToken;
+      try { sessionStorage.setItem("tripSplitPendingInvite", urlToken); } catch (_) {}
+      history.replaceState(null, "", location.pathname + location.search);
+    } else {
+      try { pendingInviteToken = sessionStorage.getItem("tripSplitPendingInvite"); } catch (_) {}
+    }
+  }
+
+  function clearInvite() {
+    pendingInviteToken = null;
+    pendingInviteDetails = null;
+    try { sessionStorage.removeItem("tripSplitPendingInvite"); } catch (_) {}
+    $("inviteAcceptance").classList.add("hidden");
+    $("inviteAuthNotice").classList.add("hidden");
+    $("showJoinRegisterBtn").classList.add("hidden");
+    $("joinRegisterForm").classList.add("hidden");
+  }
+
+  function renderInviteUI() {
+    const active = Boolean(pendingInviteToken && pendingInviteDetails);
+    $("showJoinRegisterBtn").classList.toggle("hidden", !active);
+    if (active) {
+      showMessage($("inviteAuthNotice"), "warning", `Gezi daveti: ${pendingInviteDetails.trip_name}. Hesabın varsa giriş yap, yoksa yeni hesap oluştur.`);
+      $("inviteAcceptanceTitle").textContent = `${pendingInviteDetails.trip_name} gezisine davet edildin`;
+      $("inviteAcceptanceText").textContent = "Davet bağlantısını kabul edersen bu geziye katılacaksın.";
+    }
+    $("inviteAcceptance").classList.toggle("hidden", !active || !currentUser);
+    if (!active) $("inviteAuthNotice").classList.add("hidden");
+  }
+
+  async function previewPendingInvite() {
+    if (!pendingInviteToken) return;
+    const { data, error } = await client.rpc("preview_trip_invite", {p_token:pendingInviteToken});
+    pendingInviteDetails = error ? null : (data?.[0] || null);
+    if (!pendingInviteDetails) {
+      clearInvite();
+      showMessage($("authMessage"), "warning", "Davet geçersiz, kullanılmış veya süresi dolmuş.");
+    } else renderInviteUI();
+  }
+
+  async function acceptInvite() {
+    if (!currentUser || !pendingInviteToken) return;
+    const btn = $("acceptInviteBtn");
+    btn.disabled = true;
+    try {
+      const { data, error } = await client.rpc("redeem_trip_invite", {p_token:pendingInviteToken});
+      if (error) throw error;
+      clearInvite();
+      currentTripId = null;
+      await loadTrips(data);
+      await loadBaseData();
+      switchPage("add");
+      showToast("Geziye katıldın.");
+    } catch (err) {
+      showToast(err?.message || "Davet kabul edilemedi.");
+    } finally { btn.disabled = false; }
+  }
+
+  async function registerWithInvite(e) {
+    e.preventDefault();
+    clearMessage($("joinRegisterMessage"));
+    if (!pendingInviteToken) return;
+    const username = $("joinRegisterUsername").value.trim();
+    const password = $("joinRegisterPassword").value;
+    if (password.length < 10 || !/[0-9]/.test(password) || !/[a-zA-Z]/.test(password)) {
+      showMessage($("joinRegisterMessage"), "error", "Şifre en az 10 karakter, harf ve rakam içermeli.");
+      return;
+    }
+    const button = $("joinRegisterSubmit");
+    button.disabled = true;
+    try {
+      const {data, error} = await client.functions.invoke("join-register", {
+        body:{token:pendingInviteToken,username,password}
+      });
+      if (error || !data?.ok) throw new Error(data?.error || "Hesap oluşturulamadı");
+      const loginName = data.login_name;
+      const {data: session, error: authError} = await client.auth.signInWithPassword({
+        email:`${loginName}@${AUTH_EMAIL_DOMAIN}`,password
+      });
+      if (authError) throw authError;
+      const {data: tripId,error: inviteError} = await client.rpc("redeem_trip_invite",{
+        p_token:pendingInviteToken
+      });
+      if (inviteError) throw inviteError;
+      clearInvite();
+      await enterApp(session.user);
+      await loadTrips(tripId);
+      await loadBaseData();
+      showToast("Hesabın oluşturuldu, geziye katıldın.");
+    } catch (err) {
+      showMessage($("joinRegisterMessage"),"error",err.message || "Kayıt tamamlanamadı.");
+    } finally { button.disabled = false; }
+  }
+
+  async function refreshTripInvites() {
+    if (!isTripManager() || !currentTripId) {
+      $("tripInviteList").innerHTML = "";
+      return;
+    }
+    const {data,error} = await client.rpc("list_trip_invites",{p_trip_id:currentTripId});
+    if(error) throw error;
+    $("tripInviteList").innerHTML = (data||[]).map((x)=>{
+      const used=x.use_count>=x.max_uses;
+      const expired=new Date(x.expires_at).getTime()<=Date.now();
+      const revoked=Boolean(x.revoked_at);
+      const label=revoked?"İptal":used?"Kullanıldı":expired?"Süresi doldu":"Bekliyor";
+      return `<div class="trip-invite-row"><span>Davet · ${new Date(x.created_at).toLocaleDateString("tr-TR")} <small>${label}</small></span>${(!revoked&&!used&&!expired)?`<button class="secondary invite-revoke" type="button" data-id="${x.id}">İptal Et</button>`:""}</div>`;
+    }).join("") || '<p class="muted small">Henüz davet oluşturulmadı.</p>';
+    $("tripInviteList").querySelectorAll(".invite-revoke").forEach((btn)=>
+      btn.addEventListener("click",()=>revokeInvite(btn.dataset.id)));
+  }
+
+  async function createInvite() {
+    if (!isTripManager() || !currentTripId) return;
+    clearMessage($("inviteManageMessage"));
+    $("createInviteBtn").disabled = true;
+    try {
+      const {data,error}=await client.rpc("create_trip_invite",{p_trip_id:currentTripId});
+      if (error) throw error;
+      const url=location.origin+location.pathname+"#invite="+data;
+      $("generatedInviteLink").value=url;
+      $("inviteShareBox").classList.remove("hidden");
+      await refreshTripInvites();
+      showMessage($("inviteManageMessage"),"success","Davet hazır. Bağlantıyı yalnız davet edeceğin kişiye gönder.");
+    } catch(err) {
+      showMessage($("inviteManageMessage"),"error",err.message || "Davet oluşturulamadı.");
+    } finally {$("createInviteBtn").disabled=false;}
+  }
+
+  async function copyInvite() {
+    const link=$("generatedInviteLink").value;
+    if(!link)return;
+    try {await navigator.clipboard.writeText(link);}
+    catch (_) { $("generatedInviteLink").select();document.execCommand("copy"); }
+    showToast("Davet bağlantısı kopyalandı.");
+  }
+  async function revokeInvite(id) {
+    if (!confirm("Bu davet bağlantısı iptal edilsin mi?")) return;
+    try {
+      const {error}=await client.rpc("revoke_trip_invite",{p_invitation_id:id});
+      if (error) throw error;
+      await refreshTripInvites();
+      showToast("Davet iptal edildi.");
+    } catch(err){showMessage($("inviteManageMessage"),"error",err.message);}
+  }
+
   async function bootstrapSession() {
     if (!isConfigured) {
       setScreen("setup");
@@ -232,6 +383,8 @@
       if (rememberedLogin && $("loginUser")) $("loginUser").value = rememberedLogin;
     } catch (_) {}
 
+    readInviteLink();
+    await previewPendingInvite().catch(() => undefined);
     const { data: { session } } = await client.auth.getSession();
     if (session?.user) await enterApp(session.user);
     else setScreen("auth");
@@ -333,6 +486,7 @@
     await loadTrips();
     switchPage(currentTripId ? "add" : "account");
     await loadBaseData();
+    renderInviteUI();
   }
 
   function renderTripHeader() {
@@ -341,7 +495,10 @@
     select.value = currentTripId || "";
     const trip = currentTrip();
     $("currentTripName").textContent = trip ? trip.name : "Henüz gezin yok";
-    $("currentTripSub").textContent = trip?.destination || "Yeni bir gezi oluşturarak başlayabilirsin.";
+    $("currentTripSub").textContent = trip ? (trip.destination || "Gezilerim") : "İlk gezini oluştur";
+    $("tripDateRange").textContent = trip && (trip.starts_on || trip.ends_on)
+      ? [trip.starts_on,trip.ends_on].filter(Boolean).map((d)=>String(d).split("-").reverse().join(".")).join(" – ")
+      : "";
     $("tripNoMembership").classList.toggle("hidden", Boolean(trip));
     $("appScreen").classList.toggle("no-trip", !trip);
     select.disabled = !availableTrips.length;
@@ -349,7 +506,7 @@
 
   async function loadTrips(preferredId = null) {
     const { data, error } = await client.from("trips")
-      .select("id,name,destination,starts_on,ends_on,owner_id,created_at")
+      .select("id,name,destination,starts_on,ends_on,owner_id,created_at,base_currency,allowed_currencies")
       .order("created_at", { ascending: false });
     if (error) throw error;
     availableTrips = data || [];
@@ -536,6 +693,7 @@
     renderAdminUsers();
     renderReport();
     renderMyEntries();
+    refreshTripInvites().catch((err) => showMessage($("inviteManageMessage"),"error",err.message));
   }
 
   function populateSelectors() {
@@ -1585,6 +1743,12 @@
     updateOnlineState();
 
     $("authForm").addEventListener("submit", handleAuthSubmit);
+    $("showJoinRegisterBtn").addEventListener("click", ()=>$("joinRegisterForm").classList.toggle("hidden"));
+    $("joinRegisterForm").addEventListener("submit", registerWithInvite);
+    $("acceptInviteBtn").addEventListener("click", acceptInvite);
+    $("dismissInviteBtn").addEventListener("click", clearInvite);
+    $("createInviteBtn").addEventListener("click", createInvite);
+    $("copyInviteLinkBtn").addEventListener("click", copyInvite);
     $("tripSelect").addEventListener("change", switchTrip);
     $("newTripBtn").addEventListener("click", () => { clearMessage($("tripCreateMessage")); $("tripCreateModal").classList.remove("hidden"); });
     $("tripEmptyCreateBtn").addEventListener("click", () => { clearMessage($("tripCreateMessage")); $("tripCreateModal").classList.remove("hidden"); });
