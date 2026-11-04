@@ -7,9 +7,17 @@
 
   const AUTH_EMAIL_DOMAIN = cfg.AUTH_EMAIL_DOMAIN || "travel-expenses.app";
 
-  const CURRENCIES = ["TL", "USD", "EUR", "MYR", "VND", "THB", "SGD", "GBP", "JPY"];
-  const DECIMALS = { VND: 0, JPY: 0, MYR: 2, USD: 2, TL: 2, EUR: 2, THB: 2, SGD: 2, GBP: 2 };
-  const CURRENCY_NAMES = {TL:"TRY · Türk Lirası", USD:"USD · ABD Doları",EUR:"EUR · Euro",MYR:"MYR · Ringgit",VND:"VND · Dong",THB:"THB · Baht",SGD:"SGD · Singapur Doları",GBP:"GBP · Sterlin",JPY:"JPY · Yen"};
+  const RECOMMENDED_CURRENCIES = ["TL","EUR","USD","GEL","RSD","BAM","ALL","AZN","SAR","AED","GBP","MYR","THB","VND","JPY","CHF","CAD","AUD"];
+  let CURRENCIES = [...RECOMMENDED_CURRENCIES];
+  let CURRENCY_NAMES = { TL: "TRY · Türk lirası" };
+  let personalCurrencyFavorites = new Set();
+  const currencySelectionState = Object.create(null);
+  function currencyDigits(code) {
+    try {
+      return new Intl.NumberFormat("en", { style:"currency",currency:code==="TL"?"TRY":code })
+        .resolvedOptions().maximumFractionDigits;
+    } catch (_) { return code==="VND" || code==="JPY" ? 0 : 2; }
+  }
 
   let client = null;
   let currentUser = null;
@@ -44,37 +52,124 @@
   function tripCurrencies() { return currentTrip()?.allowed_currencies || ["MYR","VND","USD","TL"]; }
   function moneyCode(c) { return c === "TL" ? "TRY" : c; }
 
+  function preferredCurrencyOrder(codes) {
+    const prior = [...personalCurrencyFavorites, ...RECOMMENDED_CURRENCIES];
+    return [...new Set([...prior, ...codes])].filter(c=>codes.includes(c));
+  }
+  async function loadCurrencyCatalog() {
+    const { data, error } = await client.from("currency_catalog").select("code,name_tr").order("code");
+    if (!error && data?.length) {
+      const codes = data.map(x=>x.code);
+      CURRENCIES = preferredCurrencyOrder(codes);
+      CURRENCY_NAMES = Object.fromEntries(data.map(x=>[x.code,
+        (x.code==="TL" ? "TRY" : x.code) + " · " + x.name_tr]));
+    } else {
+      let supported=[];
+      try { supported=Intl.supportedValuesOf("currency").filter(c=>c!=="TRY"); } catch(_){}
+      CURRENCIES=preferredCurrencyOrder([...new Set([...RECOMMENDED_CURRENCIES,...supported])]);
+      let names;
+      try { names=new Intl.DisplayNames(["tr"],{type:"currency"}); } catch(_){}
+      CURRENCY_NAMES=Object.fromEntries(CURRENCIES.map(c=>[c,
+        (c==="TL"?"TRY":c) + " · " + (c==="TL"?"Türk lirası":(names?.of(c)||c))]));
+    }
+  }
+  async function loadPersonalCurrencyFavorites() {
+    personalCurrencyFavorites = new Set();
+    if (!currentProfile) return;
+    const { data, error } = await client.from("user_currency_favorites")
+      .select("currency").eq("user_id",currentProfile.id);
+    if (error) throw error;
+    personalCurrencyFavorites = new Set((data||[]).map(x=>x.currency));
+    CURRENCIES = preferredCurrencyOrder(CURRENCIES);
+    renderPersonalFavorites();
+  }
+  function renderPersonalFavorites() {
+    const select=$("favoriteCurrencySelect"), list=$("favoriteCurrencyList");
+    if (!select || !list) return;
+    const old=select.value;
+    select.innerHTML=CURRENCIES.map(c=>'<option value="'+c+'">'+escapeHtml(CURRENCY_NAMES[c]||c)+'</option>').join("");
+    if(CURRENCIES.includes(old)) select.value=old;
+    list.innerHTML=[...personalCurrencyFavorites].map(c=>'<span class="favorite-currency-chip">'
+      +escapeHtml(CURRENCY_NAMES[c]||c)
+      +'<button type="button" data-currency="'+c+'" aria-label="Favorilerimden çıkar">×</button></span>').join("")
+      ||'<p class="muted small">Henüz favori eklenmedi.</p>';
+    list.querySelectorAll("button[data-currency]").forEach(btn=>
+      btn.addEventListener("click",()=>changeFavoriteCurrency(btn.dataset.currency,false)));
+  }
+  async function changeFavoriteCurrency(currency, add) {
+    if(!currentProfile || !CURRENCIES.includes(currency))return;
+    clearMessage($("favoriteCurrencyMessage"));
+    try {
+      const query=add
+        ? client.from("user_currency_favorites").upsert({user_id:currentProfile.id,currency},{onConflict:"user_id,currency"})
+        : client.from("user_currency_favorites").delete().eq("user_id",currentProfile.id).eq("currency",currency);
+      const {error}=await query;
+      if(error)throw error;
+      if(add)personalCurrencyFavorites.add(currency);
+      else personalCurrencyFavorites.delete(currency);
+      renderPersonalFavorites();
+      showMessage($("favoriteCurrencyMessage"),"success","Yalnız senin favori listen güncellendi.");
+    } catch(err) {showMessage($("favoriteCurrencyMessage"),"error",err?.message||"Favori kaydedilemedi.");}
+  }
+  function renderCurrencyChoiceOptions(containerId) {
+    const root=$(containerId);
+    const state=currencySelectionState[containerId]||new Set();
+    const query=(root.querySelector("input.currency-search")?.value||"").trim().toLocaleLowerCase("tr-TR");
+    const items=query
+      ? CURRENCIES.filter(c=>c.toLowerCase().includes(query) || String(CURRENCY_NAMES[c]||"").toLocaleLowerCase("tr-TR").includes(query)).slice(0,55)
+      : [...new Set([...state,...personalCurrencyFavorites,...RECOMMENDED_CURRENCIES])]
+          .filter(c=>CURRENCIES.includes(c)).slice(0,40);
+    const grid=root.querySelector(".currency-picker-options");
+    grid.innerHTML=items.map(c=>'<label class="currency-check">'
+      +'<input type="checkbox" value="'+c+'" '+(state.has(c)?"checked":"")+'>'
+      +'<span>'+escapeHtml(c==="TL"?"TRY":c)+'</span></label>').join("")
+      || '<p class="muted small">Eşleşen para birimi bulunamadı.</p>';
+    root.querySelector(".currency-picked-count").textContent=state.size+" seçili";
+    grid.querySelectorAll('input[type="checkbox"]').forEach(el=>el.addEventListener("change",()=>{
+      if(el.checked)state.add(el.value);else state.delete(el.value);
+      root.querySelector(".currency-picked-count").textContent=state.size+" seçili";
+      renderCurrencyChoiceOptions(containerId);
+    }));
+  }
   function fillCurrencyChoices(containerId, selected) {
-    const selectedSet = new Set(selected);
-    $(containerId).innerHTML = CURRENCIES.map(c => `<label class="currency-check"><input type="checkbox" value="${c}" ${selectedSet.has(c)?"checked":""}><span>${moneyCode(c)}</span></label>`).join("");
+    currencySelectionState[containerId]=new Set(selected.filter(c=>CURRENCIES.includes(c)));
+    const root=$(containerId);
+    root.innerHTML='<div class="currency-picker-toolbar"><input class="currency-search" type="search" placeholder="Para birimi ara (örn. GEL veya Gürcistan)" aria-label="Para birimi ara">'
+      +'<span class="currency-picked-count"></span></div>'
+      +'<div class="currency-picker-options"></div>'
+      +'<p class="muted small currency-picker-hint">Sık kullanılanlar ve favorilerin üstte. Diğerlerini arayarak seç.</p>';
+    root.querySelector(".currency-search").addEventListener("input",()=>renderCurrencyChoiceOptions(containerId));
+    renderCurrencyChoiceOptions(containerId);
   }
   function readCurrencyChoices(containerId, base) {
-    const chosen = [...$(containerId).querySelectorAll("input:checked")].map(el=>el.value);
-    return CURRENCIES.filter(c=>chosen.includes(c) || c===base);
+    const chosen=currencySelectionState[containerId]||new Set();
+    return CURRENCIES.filter(c=>chosen.has(c)||c===base);
   }
   function fillCurrencySelect(id, chosen) {
-    $(id).innerHTML = CURRENCIES.map(c=>`<option value="${c}">${escapeHtml(CURRENCY_NAMES[c])}</option>`).join("");
-    $(id).value = chosen || "TL";
+    $(id).innerHTML=CURRENCIES.map(c=>'<option value="'+c+'">'+escapeHtml(CURRENCY_NAMES[c]||c)+'</option>').join("");
+    $(id).value=chosen||"TL";
   }
   function setupNewTripCurrencyForm() {
     fillCurrencySelect("newTripBaseCurrency","TL");
-    fillCurrencyChoices("newTripCurrencyChoices",["TL","MYR","USD"]);
+    fillCurrencyChoices("newTripCurrencyChoices",["TL","EUR","USD"]);
   }
   function renderCurrencySettings() {
     const trip=currentTrip();
-    if(!trip) return;
+    if(!trip)return;
     fillCurrencySelect("tripBaseCurrencySettings",baseCurrency());
     fillCurrencyChoices("tripAllowedCurrencyChoices",tripCurrencies());
-    $("tripTotalNote").textContent=`Yaklaşık toplam ${moneyCode(baseCurrency())} cinsinden hesaplanır.`;
-    $("approxDebtNote").textContent=`Yaklaşık borçlar ${moneyCode(baseCurrency())} cinsindedir; kesin borçlar kendi para biriminde kalır.`;
+    $("tripTotalNote").textContent="Yaklaşık toplam "+moneyCode(baseCurrency())+" cinsinden hesaplanır.";
+    $("approxDebtNote").textContent="Yaklaşık borçlar "+moneyCode(baseCurrency())
+      +" cinsindedir; kesin borçlar kendi para biriminde kalır.";
     $("tripCurrencySettingsForm").classList.toggle("hidden",!isTripManager());
   }
   function populateCurrencySelectors() {
     const codes=tripCurrencies();
     for(const id of ["expenseCurrency","settlementCurrency","editCurrency","editSettlementCurrency","filterCurrency"]){
-      const select=$(id), old=select.value;
-      select.innerHTML=(id==="filterCurrency" ? '<option value="">Tümü</option>' : "") + codes.map(c=>`<option value="${c}">${moneyCode(c)}</option>`).join("");
-      if(codes.includes(old)) select.value=old;
+      const select=$(id),old=select.value;
+      select.innerHTML=(id==="filterCurrency" ? '<option value="">Tümü</option>' : "")
+        +codes.map(c=>'<option value="'+c+'">'+moneyCode(c)+'</option>').join("");
+      if(codes.includes(old))select.value=old;
     }
   }
 
