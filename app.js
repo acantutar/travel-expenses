@@ -1063,7 +1063,7 @@
     $("reportBody").innerHTML = visibleRows.map((e) => {
       const people = e.participant_ids.map((id) => `<span class="pill">${escapeHtml(profileName(id))}</span>`).join("");
       const tl = e.payment_type === "Kart" && e.currency !== "TL"
-        ? (e.card_tl_amount ? `${formatAmount(e.card_tl_amount, "TL")} TL` : '<span class="status-provisional">Bekliyor</span>')
+        ? (e.card_tl_amount ? `${formatAmount(e.card_tl_amount, "TL")} TL` : (baseCurrency()==="TL" ? '<span class="status-provisional">Bekliyor</span>' : "—"))
         : (e.currency === "TL" ? `${formatAmount(e.amount, "TL")} TL` : "—");
 
       return `<tr data-id="${e.expense_id}" class="${canManageExpense(e.expense_id) ? "admin-clickable" : ""}">
@@ -1107,12 +1107,12 @@
     const approxMap = new Map();
 
     allProfiles.forEach((p) => {
-      map.set(p.id, { MYR: 0, VND: 0, USD: 0, TL: 0 });
+      map.set(p.id,Object.fromEntries(CURRENCIES.map(c=>[c,0])));
       approxMap.set(p.id, { minor: 0, missing: new Set() });
     });
 
     rows.forEach((e) => {
-      if (!map.has(e.payer_id)) map.set(e.payer_id, { MYR: 0, VND: 0, USD: 0, TL: 0 });
+      if (!map.has(e.payer_id)) map.set(e.payer_id,Object.fromEntries(CURRENCIES.map(c=>[c,0])));
       if (!approxMap.has(e.payer_id)) approxMap.set(e.payer_id, { minor: 0, missing: new Set() });
 
       map.get(e.payer_id)[e.currency] += Number(e.amount);
@@ -1123,11 +1123,11 @@
         approx.missing.add(e.currency);
       } else {
         // Gezi yaklaşık toplamındakiyle aynı mantık: her harcama adminin genel kuru ile TL'ye çevrilir.
-        approx.minor += toMinor(Number(e.amount) * rate, "TL");
+        approx.minor += toMinor(Number(e.amount) * rate, baseCurrency());
       }
     });
 
-    const used = [...map.entries()].filter(([, totals]) => CURRENCIES.some((c) => totals[c] !== 0));
+    const used = [...map.entries()].filter(([, totals]) => tripCurrencies().some((c) => totals[c] !== 0));
     const grid = $("spendTotalsGrid");
     if (!used.length) {
       grid.className = "totals-grid empty-state";
@@ -1144,10 +1144,10 @@
 
       return `<div class="total-card spend-total-card">
         <div class="total-user">${escapeHtml(profileName(id))}</div>
-        ${CURRENCIES.map((c) => `<div class="total-line"><span>${c}</span><strong>${formatAmount(totals[c], c)}</strong></div>`).join("")}
+        ${tripCurrencies().filter(c=>totals[c]!==0).map((c) => `<div class="total-line"><span>${moneyCode(c)}</span><strong>${formatAmount(totals[c], c)}</strong></div>`).join("")}
         <div class="spend-approx-total">
           <span>Toplam Yaklaşık Harcama</span>
-          <strong>${formatApproxTl(fromMinor(approx.minor, "TL"))}</strong>
+          <strong>${formatApproxTl(fromMinor(approx.minor, baseCurrency()))}</strong>
         </div>
         ${missingNote}
       </div>`;
@@ -1155,15 +1155,16 @@
   }
 
   function rateFor(currency) {
-    return currency === "TL" ? 1 : Number(displayRates[currency] || 0);
+    return currency === baseCurrency() ? 1 : Number(displayRates[currency] || 0);
   }
 
   function formatApproxTl(value) {
-    const rounded = new Intl.NumberFormat("tr-TR", {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(Number(value || 0));
-    return `≈ ₺${rounded}`;
+    const currency=baseCurrency();
+    const rounded=new Intl.NumberFormat("tr-TR", {
+      minimumFractionDigits:0,
+      maximumFractionDigits:currency==="TL"||currency==="VND"||currency==="JPY"?0:2
+    }).format(Number(value||0));
+    return `≈ ${currency==="TL"?"₺":currency==="USD"?"$":currency==="EUR"?"€":""}${rounded} ${currency==="TL"?"":moneyCode(currency)}`.trim();
   }
 
   function calculateApproxTlDebts(rows, settlements = []) {
@@ -1181,7 +1182,7 @@
 
       // Yaklaşık bölüm bilinçli olarak adminin girdiği genel kuru kullanır.
       // Kartın tekil kesin TL tutarı bu özet hesabına karışmaz.
-      const total = toMinor(Number(e.amount) * rate, "TL");
+      const total = toMinor(Number(e.amount) * rate, baseCurrency());
       const ids = [...e.participant_ids].sort();
       const n = ids.length;
       if (!n) return;
@@ -1199,7 +1200,7 @@
         missing.add(x.currency);
         return;
       }
-      const total = toMinor(Number(x.amount) * rate, "TL");
+      const total = toMinor(Number(x.amount) * rate, baseCurrency());
       add(x.from_user_id, total);
       add(x.to_user_id, -total);
     });
@@ -1233,7 +1234,7 @@
     const warning = $("approxDebtWarning");
 
     if (missing.size) {
-      warning.textContent = `Yaklaşık hesap kısmi: ${[...missing].join(", ")} için admin kuru girilmemiş.`;
+      warning.textContent = `Yaklaşık hesap kısmi: ${[...missing].join(", ")} için gezi kuru girilmemiş.`;
       warning.classList.remove("hidden");
     } else {
       warning.classList.add("hidden");
@@ -1245,14 +1246,14 @@
       const outgoing = debts.filter((d) => d.debtor === p.id);
       const totalMinor = outgoing.reduce((sum, d) => sum + d.minor, 0);
       const lines = outgoing.length
-        ? outgoing.map((d) => `<div class="total-line approx-debt-line"><span>${escapeHtml(profileName(d.creditor))}</span><strong>${formatApproxTl(fromMinor(d.minor, "TL"))}</strong></div>`).join("")
+        ? outgoing.map((d) => `<div class="total-line approx-debt-line"><span>${escapeHtml(profileName(d.creditor))}</span><strong>${formatApproxTl(fromMinor(d.minor, baseCurrency()))}</strong></div>`).join("")
         : '<div class="approx-no-debt">Ödenecek yaklaşık borç yok</div>';
 
       return `<div class="total-card approx-debt-card ${p.is_active === false ? "inactive-profile-card" : ""}">
         <div class="total-user">${escapeHtml(p.username)}${p.is_active === false ? ' <span class="inactive-inline">Pasif</span>' : ""}</div>
         <div class="approx-card-caption">Kime yaklaşık ne kadar ödeyecek?</div>
         ${lines}
-        <div class="approx-total-line"><span>Toplam Yaklaşık Borcu</span><strong>${formatApproxTl(fromMinor(totalMinor, "TL"))}</strong></div>
+        <div class="approx-total-line"><span>Toplam Yaklaşık Borcu</span><strong>${formatApproxTl(fromMinor(totalMinor, baseCurrency()))}</strong></div>
       </div>`;
     }).join("");
   }
@@ -1267,29 +1268,28 @@
         missing.add(e.currency);
         return;
       }
-      totalMinor += toMinor(Number(e.amount) * rate, "TL");
+      totalMinor += toMinor(Number(e.amount) * rate, baseCurrency());
     });
 
-    $("tripApproxTotal").textContent = formatApproxTl(fromMinor(totalMinor, "TL"));
-    const rateParts = ["MYR", "VND", "USD"]
+    $("tripApproxTotal").textContent = formatApproxTl(fromMinor(totalMinor, baseCurrency()));
+    const rateParts = tripCurrencies().filter(c=>c!==baseCurrency())
       .filter((c) => rateFor(c))
-      .map((c) => `${c} ${rateFor(c).toLocaleString("tr-TR", { maximumFractionDigits: 8 })} TL`);
+      .map((c) => `${c} ${rateFor(c).toLocaleString("tr-TR", { maximumFractionDigits: 8 })} ${moneyCode(baseCurrency())}`);
     const missingText = missing.size ? ` • Eksik kur: ${[...missing].join(", ")}` : "";
     $("tripApproxMeta").textContent = `${rows.length} aktif harcama • ${rateParts.join(" • ") || "Kur bekleniyor"}${missingText}`;
   }
 
   function renderDisplayRateAdmin() {
     if (!isTripManager()) return;
-    ["MYR", "VND", "USD"].forEach((c) => {
-      const el = $(`rate${c}`);
-      if (el) el.value = displayRates[c] || "";
-    });
-
-    const latest = displayRateRows
-      .filter((r) => r.updated_at)
-      .sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))[0];
-    $("displayRatesUpdated").textContent = latest
-      ? `Son güncelleme: ${new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(latest.updated_at))}`
+    const base=baseCurrency();
+    $("dynamicRateFields").innerHTML=tripCurrencies()
+      .filter(c=>c!==base)
+      .map(c=>`<label><span>1 ${moneyCode(c)} kaç ${moneyCode(base)}?</span><input class="rate-entry" data-currency="${c}" type="number" min="0.00000000001" step="any" inputmode="decimal" placeholder="Kur gir" value="${displayRates[c] || ""}" /></label>`)
+      .join("") || '<p class="muted small">Tek para birimi seçildi; kur girmen gerekmiyor.</p>';
+    const latest=displayRateRows.filter(r=>r.updated_at)
+      .sort((a,b)=>new Date(b.updated_at)-new Date(a.updated_at))[0];
+    $("displayRatesUpdated").textContent=latest
+      ? `Son güncelleme: ${new Intl.DateTimeFormat("tr-TR",{dateStyle:"medium",timeStyle:"short"}).format(new Date(latest.updated_at))}`
       : "Henüz yaklaşık kur girilmedi.";
   }
 
@@ -1297,33 +1297,27 @@
     e.preventDefault();
     clearMessage($("displayRatesMessage"));
     if (!isTripManager()) return;
-    if (!navigator.onLine) {
-      showMessage($("displayRatesMessage"), "warning", "İnternet bağlantısı yok. Kurlar kaydedilmedi.");
+    const entries=[...$("dynamicRateFields").querySelectorAll(".rate-entry")]
+      .filter(el=>el.value.trim())
+      .map(el=>({currency:el.dataset.currency,rate:Number(el.value)}));
+    if (!entries.length || entries.some(x=>!Number.isFinite(x.rate)||x.rate<=0)) {
+      showMessage($("displayRatesMessage"),"error","En az bir geçerli, sıfırdan büyük kur gir.");
       return;
     }
-
-    const myr = Number($("rateMYR").value);
-    const vnd = Number($("rateVND").value);
-    const usd = Number($("rateUSD").value);
-    if (![myr, vnd, usd].every((x) => Number.isFinite(x) && x > 0)) {
-      showMessage($("displayRatesMessage"), "error", "MYR, VND ve USD için sıfırdan büyük TL karşılığı gir.");
-      return;
-    }
-
-    const btn = $("saveDisplayRatesBtn");
-    btn.disabled = true;
-    btn.textContent = "Kaydediliyor…";
+    const btn=$("saveDisplayRatesBtn");
+    btn.disabled=true;
     try {
-      const { error } = await client.rpc("set_trip_display_rates", { p_trip_id: currentTripId, p_myr: myr, p_vnd: vnd, p_usd: usd });
-      if (error) throw error;
+      for(const item of entries){
+        const {error}=await client.rpc("set_trip_currency_rate",{
+          p_trip_id:currentTripId,p_currency:item.currency,p_rate:item.rate
+        });
+        if(error)throw error;
+      }
       await loadBaseData();
-      showMessage($("displayRatesMessage"), "success", "✓ Yaklaşık TL kurları kaydedildi. Harcama kayıtları değiştirilmedi.");
-    } catch (err) {
-      showMessage($("displayRatesMessage"), "error", isNetworkLikeError(err) ? "Kurlar kaydedilemedi. Bağlantıyı kontrol et." : err.message);
-    } finally {
-      btn.disabled = false;
-      btn.textContent = "Yaklaşık Kurları Kaydet";
-    }
+      showMessage($("displayRatesMessage"),"success","Yaklaşık kurlar kaydedildi. Kesin borçlar değişmedi.");
+    } catch(err) {
+      showMessage($("displayRatesMessage"),"error",err.message || "Kur kaydedilemedi.");
+    } finally {btn.disabled=false;}
   }
 
   function toMinor(amount, currency) {
@@ -1350,10 +1344,10 @@
 
       if (e.payment_type === "Kart" && e.currency !== "TL") {
         if (e.card_tl_amount) {
-          currency = "TL";
-          amount = e.card_tl_amount;
-        } else {
-          provisional = true;
+          currency="TL";
+          amount=e.card_tl_amount;
+        } else if (baseCurrency()==="TL") {
+          provisional=true;
         }
       }
       if (provisional) provisionalCurrencies.add(currency);
