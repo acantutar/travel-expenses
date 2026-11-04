@@ -30,7 +30,7 @@ Eski ACT / Büşra / Fatma / Sena hesapları ve önceki ledger kayıtları korun
 - Yönetici kullanıcı işlemleri: `admin-users` Edge Function
 - Eski veri değişiklikleri silinmez; yeni sürüm eklenir (append-only)
 
-Sıfırdan kurulum için önce `schema.sql`, ardından `migrations/v4_multitrip.sql` ve `migrations/v4_1_invites_currencies.sql` şema değişikliklerini **ortama göre gözden geçirerek** uygula. Mevcut canlı projede bunlar uygulanmıştır; tekrar çalıştırma.
+Kurulum ve geçiş sırasını `SETUP.md` açıklar. GitHub'daki eski `schema.sql` tek başına v4.1 kurmak için yeterli değildir; canlı Supabase projesinin migration geçmişi esas alınmalıdır.
 
 ## Güvenlik ve sınırlamalar
 
