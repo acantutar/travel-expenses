@@ -473,3 +473,102 @@ button.my-entry-card:active{transform:scale(.995)}
   .invite-share{grid-template-columns:1fr}
   .invite-tools>.primary{width:100%}
 }
+
+
+/* v4.2 — tidy, single-row trip header. Retains original TripSplit palette and density. */
+#appScreen .trip-header-clean{
+  width:100%;max-width:1200px;margin:0 auto;padding:16px 24px 12px;
+  min-height:82px;height:auto;display:flex;align-items:center;justify-content:space-between;
+  gap:24px;
+}
+#appScreen .trip-header-clean .brand-line{font-size:1.4rem;font-weight:850;flex-shrink:0;line-height:1.15;white-space:nowrap}
+#appScreen .trip-header-clean .trip-header-right{
+  display:flex;align-items:center;justify-content:flex-end;gap:12px;margin-left:auto;
+  border:0;padding:0;box-shadow:none;background:none;min-width:0;
+}
+#appScreen .trip-header-clean .trip-header-picker{
+  display:flex;flex-direction:column;gap:2px;
+  width:clamp(185px,28vw,285px);min-width:0;
+  padding:7px 12px 6px;min-height:56px;
+  border:1px solid #d6e8e4;border-radius:13px;background:#fff;
+}
+#appScreen .trip-header-clean .trip-header-label{
+  color:var(--muted);font-size:.65rem;font-weight:700;line-height:1.1;letter-spacing:.02em;
+}
+#appScreen .trip-header-clean #tripSelect{
+  border:0;box-shadow:none;background:transparent;
+  width:100%;max-width:100%;padding:0 19px 0 0;min-height:24px;height:24px;
+  font-size:.9rem;font-weight:800;line-height:1.2;color:var(--text);
+  text-overflow:ellipsis;white-space:nowrap;
+}
+#appScreen .trip-header-clean .trip-header-date{
+  display:block;min-height:10px;color:var(--muted);font-size:.62rem;line-height:1.2;
+}
+#appScreen .trip-header-clean .trip-header-create{
+  height:42px;min-height:42px;white-space:nowrap;border-radius:12px;
+  font-weight:800;font-size:.82rem;padding:8px 15px;
+  background:#fff;border:1px solid #d6e8e4;color:var(--teal);
+}
+#appScreen .trip-header-clean .trip-header-create:hover{background:#e8f7f3}
+#appScreen .trip-header-clean .user-chip{
+  height:40px;min-width:43px;display:flex;align-items:center;justify-content:center;
+  font-size:.8rem;padding:7px 11px;flex-shrink:0;
+}
+#appScreen .trip-header-clean + #currentTripName,
+#appScreen .trip-header-clean ~ #currentTripSub {display:none!important}
+
+/* Searchable currency selection: selection is explicit, not a wall of 159 boxes. */
+.currency-picker{display:grid;gap:10px;margin-top:7px}
+.currency-picker-toolbar{display:flex;gap:9px;align-items:center}
+.currency-picker-toolbar .currency-search{
+  width:100%;min-width:0;flex:1;min-height:39px;padding:8px 11px;
+  border:1px solid var(--line);border-radius:11px;font-size:.86rem;
+}
+.currency-picked-count{font-size:.71rem;color:var(--teal);font-weight:800;white-space:nowrap}
+.currency-picker-options{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px}
+.currency-picker-options .currency-check{
+  display:flex;justify-content:flex-start;align-items:center;min-height:35px;
+  border-radius:10px;padding:7px 8px;gap:5px;font-size:.76rem;
+}
+.currency-picker-options .currency-check:has(input:checked){
+  background:#e7f8f4;border-color:#9cd6cc;color:#0d7067;
+}
+.currency-picker .currency-picker-hint{margin:0;color:var(--muted);font-size:.72rem}
+.favorite-currency-add{display:flex;align-items:center;gap:9px;margin-bottom:12px}
+.favorite-currency-add select{flex:1;min-width:0;min-height:42px;padding:8px 11px}
+.favorite-currency-add button{white-space:nowrap;min-height:42px}
+.favorite-currency-list{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
+.favorite-currency-chip{
+  display:inline-flex;align-items:center;gap:7px;background:#edf7f5;
+  border:1px solid #d3e9e3;border-radius:18px;padding:5px 7px 5px 11px;
+  font-size:.77rem;font-weight:750;color:var(--text);
+}
+.favorite-currency-chip button{border:0;background:transparent;color:var(--muted);font-size:1rem;cursor:pointer;padding:0 4px}
+.favorite-currency-chip button:hover{color:var(--danger)}
+#selfPasswordForm{display:grid;gap:10px}
+#selfPasswordForm button{justify-self:start}
+@media(max-width:760px){
+  #appScreen .trip-header-clean{padding:12px 15px 9px;gap:12px;min-height:72px}
+  #appScreen .trip-header-clean .trip-header-right{gap:7px}
+  #appScreen .trip-header-clean .trip-header-picker{width:clamp(145px,39vw,235px);min-height:52px;padding:6px 9px}
+  #appScreen .trip-header-clean .trip-header-create{padding:7px 10px;font-size:.77rem}
+  .currency-picker-options{grid-template-columns:repeat(4,minmax(0,1fr))}
+}
+@media(max-width:550px){
+  #appScreen.entry-mode .trip-header-clean,#appScreen .trip-header-clean{
+    display:flex!important;flex-wrap:wrap;align-items:center;justify-content:space-between;
+    gap:10px;padding:10px 12px 7px;min-height:100px;
+  }
+  #appScreen .trip-header-clean .brand-line{font-size:1.17rem}
+  #appScreen .trip-header-clean .trip-header-right{width:100%;gap:7px;flex:1 1 100%;margin-left:0}
+  #appScreen .trip-header-clean .trip-header-picker{width:auto;flex:1 1 auto;min-width:0;min-height:46px}
+  #appScreen .trip-header-clean #tripSelect{height:20px;min-height:20px;font-size:.79rem}
+  #appScreen .trip-header-clean .trip-header-date{font-size:.6rem}
+  #appScreen .trip-header-clean .trip-header-create{min-height:40px;height:40px;font-size:.72rem}
+  #appScreen .trip-header-clean .user-chip{min-width:37px;height:37px;padding:5px 8px}
+  #appScreen.entry-mode #page-add{padding-top:4px}
+  .currency-picker-options{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .favorite-currency-add{flex-wrap:wrap}
+  .favorite-currency-add select{flex-basis:100%}
+  .favorite-currency-add button{width:100%}
+}
