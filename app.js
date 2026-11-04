@@ -1523,14 +1523,12 @@
       exported_at: new Date().toISOString(),
       selected_trip: currentTrip(),
       trip_members: tripMembers,
-      selected_trip: currentTrip(),
-      trip_members: tripMembers,
       profiles: allProfiles,
       expense_versions: allVersions,
       settlement_versions: allSettlementVersions,
       display_rates: displayRateRows
     };
-    downloadBlob(`tripsplit-backup-${localToday()}.json`, JSON.stringify(payload, null, 2), "application/json");
+    downloadBlob(`tripsplit-${(currentTrip()?.name || "gezi").toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${localToday()}-backup.json`, JSON.stringify(payload, null, 2), "application/json");
     showToast("Tam JSON yedeği indirildi.");
   }
 
