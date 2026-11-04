@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <title>TripSplit</title>
-  <link rel="stylesheet" href="styles.css?v=3.11" />
+  <link rel="stylesheet" href="styles.css?v=4.0" />
 </head>
 <body>
   <div id="offlineBanner" class="offline-banner hidden">İnternet yok — yeni kayıt veya değişiklik kaydedilemez.</div>
@@ -25,7 +25,7 @@
       <div class="auth-card login-card">
         <div class="brand-icon">🌴</div>
         <h1>TripSplit</h1>
-        <p class="muted">Vietnam & Malezya gezi harcamaları</p>
+        <p class="muted">Gezilerini ve ortak harcamalarını tek yerden yönet.</p>
         <form id="authForm" class="stack login-form">
           <label>
             <span>Kullanıcı Adı</span>
@@ -44,11 +44,24 @@
     <section id="appScreen" class="screen hidden">
       <header class="mobile-header">
         <div>
-          <div class="eyebrow">Vietnam • Malaysia</div>
+          <div id="currentTripSub" class="eyebrow">Gezi seç</div>
           <div class="brand-line"><span>TripSplit</span><span class="brand-emoji">✈️</span></div>
         </div>
         <div id="userChip" class="user-chip"></div>
       </header>
+
+      <div class="trip-switcher panel">
+        <div class="trip-switcher-heading"><strong id="currentTripName">Gezi yükleniyor…</strong><span class="muted small">Gezi seç veya oluştur</span></div>
+        <div class="trip-switcher-controls">
+          <select id="tripSelect" aria-label="Aktif gezi"></select>
+          <button id="newTripBtn" class="secondary" type="button">＋ Yeni Gezi</button>
+        </div>
+      </div>
+      <div id="tripNoMembership" class="panel trip-empty hidden">
+        <h2>İlk gezini oluştur</h2>
+        <p>Henüz dahil olduğun gezi yok. Yeni bir gezi oluşturabilir veya bir gezi yöneticisinden seni eklemesini isteyebilirsin.</p>
+        <button id="tripEmptyCreateBtn" class="primary" type="button">Yeni Gezi Oluştur</button>
+      </div>
 
       <section id="page-add" class="page active entry-page">
         <div class="entry-type-switch" role="tablist" aria-label="Kayıt tipi">
@@ -295,7 +308,26 @@
           </form>
           <div id="passwordMessage" class="message hidden"></div>
           </div>
-          <div class="rate-admin-block">
+          <div class="admin-tools">
+            <button id="backupJsonBtn" class="secondary" type="button">Gezi Yedeği (JSON)</button>
+            <button id="exportCsvBtn" class="secondary" type="button">CSV İndir</button>
+          </div>
+          <p class="backup-note">Tam yedek; harcama ve borç ödeme revizyonları ile iptal edilmiş kayıtları da içerir.</p>
+        </div>
+        <div id="tripMembersPanel" class="panel hidden">
+          <div class="section-title"><div><h3>Gezi Üyeleri</h3><p id="accountTripName">—</p></div><span id="accountTripRole" class="count-pill">—</span></div>
+          <div id="tripMembersList" class="trip-member-list"></div>
+          <div id="tripMemberManageTools" class="hidden">
+            <h4>Üye Ekle</h4>
+            <form id="tripAddMemberForm" class="trip-add-member-form">
+              <label><span>Kullanıcı Adı</span><input id="tripAddLogin" placeholder="Örn. sena veya ahmet.yilmaz" required /></label>
+              <button class="primary" type="submit">Geziye Ekle</button>
+            </form>
+            <p class="backup-note">Kişinin önce TripSplit kullanıcısı olması gerekir. Yalnızca geziye eklenenler bu gezinin verilerini görebilir.</p>
+            <div id="tripMemberMessage" class="message hidden"></div>
+          </div>
+        </div>
+          <div id="tripRatePanel" class="rate-admin-block panel hidden">
             <div class="section-title">
               <div>
                 <h3>Yaklaşık TL Kurları</h3>
@@ -311,12 +343,6 @@
             <div id="displayRatesMessage" class="message hidden"></div>
             <p id="displayRatesUpdated" class="backup-note">Henüz yaklaşık kur girilmedi.</p>
           </div>
-          <div class="admin-tools">
-            <button id="backupJsonBtn" class="secondary" type="button">Tam Yedek (JSON)</button>
-            <button id="exportCsvBtn" class="secondary" type="button">CSV İndir</button>
-          </div>
-          <p class="backup-note">Tam yedek; harcama ve borç ödeme revizyonları ile iptal edilmiş kayıtları da içerir.</p>
-        </div>
       </section>
 
       <nav class="bottom-nav" aria-label="Ana menü">
@@ -327,6 +353,19 @@
       </nav>
     </section>
   </main>
+
+  <div id="tripCreateModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-label="Yeni gezi oluştur">
+    <div class="modal">
+      <div class="modal-head"><div><div class="eyebrow">TripSplit v4</div><h2>Yeni Gezi</h2><p class="muted small">Gezinin sahibi sen olursun. Katılımcıları daha sonra ekleyebilirsin.</p></div><button id="closeTripCreateModal" class="icon-button" type="button" aria-label="Kapat">×</button></div>
+      <form id="newTripForm" class="stack">
+        <label><span>Gezi Adı</span><input id="newTripName" maxlength="100" placeholder="Örn. Tayland 2027" required /></label>
+        <label><span>Hedef <small>(opsiyonel)</small></span><input id="newTripDestination" maxlength="120" placeholder="Örn. Bangkok, Krabi" /></label>
+        <div class="two-col"><label><span>Başlangıç <small>(opsiyonel)</small></span><input id="newTripStart" type="date" /></label><label><span>Bitiş <small>(opsiyonel)</small></span><input id="newTripEnd" type="date" /></label></div>
+        <button id="saveNewTripBtn" class="primary" type="submit">Gezi Oluştur</button>
+        <div id="tripCreateMessage" class="message hidden"></div>
+      </form>
+    </div>
+  </div>
 
   <div id="adminModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
     <div class="modal">
@@ -371,7 +410,7 @@
   <div id="toast" class="toast hidden"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="config.js?v=3.11"></script>
-  <script src="app.js?v=3.11"></script>
+  <script src="config.js?v=4.0"></script>
+  <script src="app.js?v=4.0"></script>
 </body>
 </html>
