@@ -100,8 +100,12 @@
     if(!currentProfile || !CURRENCIES.includes(currency))return;
     clearMessage($("favoriteCurrencyMessage"));
     try {
+      if(add && personalCurrencyFavorites.has(currency)) {
+        showMessage($("favoriteCurrencyMessage"),"success","Bu para birimi zaten favorilerinde.");
+        return;
+      }
       const query=add
-        ? client.from("user_currency_favorites").upsert({user_id:currentProfile.id,currency},{onConflict:"user_id,currency"})
+        ? client.from("user_currency_favorites").insert({user_id:currentProfile.id,currency})
         : client.from("user_currency_favorites").delete().eq("user_id",currentProfile.id).eq("currency",currency);
       const {error}=await query;
       if(error)throw error;
