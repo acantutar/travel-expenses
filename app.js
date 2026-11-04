@@ -7,8 +7,9 @@
 
   const AUTH_EMAIL_DOMAIN = cfg.AUTH_EMAIL_DOMAIN || "travel-expenses.app";
 
-  const CURRENCIES = ["MYR", "VND", "USD", "TL"];
-  const DECIMALS = { VND: 0, MYR: 2, USD: 2, TL: 2 };
+  const CURRENCIES = ["TL", "USD", "EUR", "MYR", "VND", "THB", "SGD", "GBP", "JPY"];
+  const DECIMALS = { VND: 0, JPY: 0, MYR: 2, USD: 2, TL: 2, EUR: 2, THB: 2, SGD: 2, GBP: 2 };
+  const CURRENCY_NAMES = {TL:"TRY · Türk Lirası", USD:"USD · ABD Doları",EUR:"EUR · Euro",MYR:"MYR · Ringgit",VND:"VND · Dong",THB:"THB · Baht",SGD:"SGD · Singapur Doları",GBP:"GBP · Sterlin",JPY:"JPY · Yen"};
 
   let client = null;
   let currentUser = null;
@@ -19,6 +20,8 @@
   let currentTripId = null;
   let tripMembers = [];
   let currentTripRole = null;
+  let pendingInviteToken = null;
+  let pendingInviteDetails = null;
 
   function isTripManager() {
     return currentTripRole === "owner" || currentTripRole === "admin";
@@ -36,7 +39,62 @@
   let allSettlementVersions = [];
   let currentSettlements = [];
   let displayRateRows = [];
-  let displayRates = { MYR: null, VND: null, USD: null, TL: 1 };
+  let displayRates = {};
+  function baseCurrency() { return currentTrip()?.base_currency || "TL"; }
+  function tripCurrencies() { return currentTrip()?.allowed_currencies || ["MYR","VND","USD","TL"]; }
+  function moneyCode(c) { return c === "TL" ? "TRY" : c; }
+
+  function fillCurrencyChoices(containerId, selected) {
+    const selectedSet = new Set(selected);
+    $(containerId).innerHTML = CURRENCIES.map(c => `<label class="currency-check"><input type="checkbox" value="${c}" ${selectedSet.has(c)?"checked":""}><span>${moneyCode(c)}</span></label>`).join("");
+  }
+  function readCurrencyChoices(containerId, base) {
+    const chosen = [...$(containerId).querySelectorAll("input:checked")].map(el=>el.value);
+    return CURRENCIES.filter(c=>chosen.includes(c) || c===base);
+  }
+  function fillCurrencySelect(id, chosen) {
+    $(id).innerHTML = CURRENCIES.map(c=>`<option value="${c}">${escapeHtml(CURRENCY_NAMES[c])}</option>`).join("");
+    $(id).value = chosen || "TL";
+  }
+  function setupNewTripCurrencyForm() {
+    fillCurrencySelect("newTripBaseCurrency","TL");
+    fillCurrencyChoices("newTripCurrencyChoices",["TL","MYR","USD"]);
+  }
+  function renderCurrencySettings() {
+    const trip=currentTrip();
+    if(!trip) return;
+    fillCurrencySelect("tripBaseCurrencySettings",baseCurrency());
+    fillCurrencyChoices("tripAllowedCurrencyChoices",tripCurrencies());
+    $("tripTotalNote").textContent=`Yaklaşık toplam ${moneyCode(baseCurrency())} cinsinden hesaplanır.`;
+    $("approxDebtNote").textContent=`Yaklaşık borçlar ${moneyCode(baseCurrency())} cinsindedir; kesin borçlar kendi para biriminde kalır.`;
+    $("tripCurrencySettingsForm").classList.toggle("hidden",!isTripManager());
+  }
+  function populateCurrencySelectors() {
+    const codes=tripCurrencies();
+    for(const id of ["expenseCurrency","settlementCurrency","editCurrency","editSettlementCurrency","filterCurrency"]){
+      const select=$(id), old=select.value;
+      select.innerHTML=(id==="filterCurrency" ? '<option value="">Tümü</option>' : "") + codes.map(c=>`<option value="${c}">${moneyCode(c)}</option>`).join("");
+      if(codes.includes(old)) select.value=old;
+    }
+  }
+
+  async function saveTripCurrencySettings(e) {
+    e.preventDefault();
+    if(!isTripManager())return;
+    clearMessage($("tripCurrencyMessage"));
+    const nextBase=$("tripBaseCurrencySettings").value;
+    const nextList=readCurrencyChoices("tripAllowedCurrencyChoices",nextBase);
+    if(!nextList.length) return;
+    try {
+      const {error}=await client.rpc("set_trip_currency_settings",{
+        p_trip_id:currentTripId,p_base_currency:nextBase,p_currencies:nextList
+      });
+      if(error) throw error;
+      await loadTrips(currentTripId);
+      await loadBaseData();
+      showMessage($("tripCurrencyMessage"),"success","Para birimleri kaydedildi. Ana para birimi değiştiyse yaklaşık kurları yeniden gir.");
+    } catch(err) {showMessage($("tripCurrencyMessage"),"error",err.message);}
+  }
   let toastTimer = null;
   let reportDetailsExpanded = false;
 
@@ -217,6 +275,155 @@
     } catch (_) {}
   }
 
+  function readInviteLink() {
+    const urlToken = new URLSearchParams(location.hash.replace(/^#/, "")).get("invite");
+    if (urlToken && /^[a-f0-9]{64}$/.test(urlToken)) {
+      pendingInviteToken = urlToken;
+      try { sessionStorage.setItem("tripSplitPendingInvite", urlToken); } catch (_) {}
+      history.replaceState(null, "", location.pathname + location.search);
+    } else {
+      try { pendingInviteToken = sessionStorage.getItem("tripSplitPendingInvite"); } catch (_) {}
+    }
+  }
+
+  function clearInvite() {
+    pendingInviteToken = null;
+    pendingInviteDetails = null;
+    try { sessionStorage.removeItem("tripSplitPendingInvite"); } catch (_) {}
+    $("inviteAcceptance").classList.add("hidden");
+    $("inviteAuthNotice").classList.add("hidden");
+    $("showJoinRegisterBtn").classList.add("hidden");
+    $("joinRegisterForm").classList.add("hidden");
+  }
+
+  function renderInviteUI() {
+    const active = Boolean(pendingInviteToken && pendingInviteDetails);
+    $("showJoinRegisterBtn").classList.toggle("hidden", !active);
+    if (active) {
+      showMessage($("inviteAuthNotice"), "warning", `Gezi daveti: ${pendingInviteDetails.trip_name}. Hesabın varsa giriş yap, yoksa yeni hesap oluştur.`);
+      $("inviteAcceptanceTitle").textContent = `${pendingInviteDetails.trip_name} gezisine davet edildin`;
+      $("inviteAcceptanceText").textContent = "Davet bağlantısını kabul edersen bu geziye katılacaksın.";
+    }
+    $("inviteAcceptance").classList.toggle("hidden", !active || !currentUser);
+    if (!active) $("inviteAuthNotice").classList.add("hidden");
+  }
+
+  async function previewPendingInvite() {
+    if (!pendingInviteToken) return;
+    const { data, error } = await client.rpc("preview_trip_invite", {p_token:pendingInviteToken});
+    pendingInviteDetails = error ? null : (data?.[0] || null);
+    if (!pendingInviteDetails) {
+      clearInvite();
+      showMessage($("authMessage"), "warning", "Davet geçersiz, kullanılmış veya süresi dolmuş.");
+    } else renderInviteUI();
+  }
+
+  async function acceptInvite() {
+    if (!currentUser || !pendingInviteToken) return;
+    const btn = $("acceptInviteBtn");
+    btn.disabled = true;
+    try {
+      const { data, error } = await client.rpc("redeem_trip_invite", {p_token:pendingInviteToken});
+      if (error) throw error;
+      clearInvite();
+      currentTripId = null;
+      await loadTrips(data);
+      await loadBaseData();
+      switchPage("add");
+      showToast("Geziye katıldın.");
+    } catch (err) {
+      showToast(err?.message || "Davet kabul edilemedi.");
+    } finally { btn.disabled = false; }
+  }
+
+  async function registerWithInvite(e) {
+    e.preventDefault();
+    clearMessage($("joinRegisterMessage"));
+    if (!pendingInviteToken) return;
+    const username = $("joinRegisterUsername").value.trim();
+    const password = $("joinRegisterPassword").value;
+    if (password.length < 10 || !/[0-9]/.test(password) || !/[a-zA-Z]/.test(password)) {
+      showMessage($("joinRegisterMessage"), "error", "Şifre en az 10 karakter, harf ve rakam içermeli.");
+      return;
+    }
+    const button = $("joinRegisterSubmit");
+    button.disabled = true;
+    try {
+      const {data, error} = await client.functions.invoke("join-register", {
+        body:{token:pendingInviteToken,username,password}
+      });
+      if (error || !data?.ok) throw new Error(data?.error || "Hesap oluşturulamadı");
+      const loginName = data.login_name;
+      const {data: session, error: authError} = await client.auth.signInWithPassword({
+        email:`${loginName}@${AUTH_EMAIL_DOMAIN}`,password
+      });
+      if (authError) throw authError;
+      const {data: tripId,error: inviteError} = await client.rpc("redeem_trip_invite",{
+        p_token:pendingInviteToken
+      });
+      if (inviteError) throw inviteError;
+      clearInvite();
+      await enterApp(session.user);
+      await loadTrips(tripId);
+      await loadBaseData();
+      showToast("Hesabın oluşturuldu, geziye katıldın.");
+    } catch (err) {
+      showMessage($("joinRegisterMessage"),"error",err.message || "Kayıt tamamlanamadı.");
+    } finally { button.disabled = false; }
+  }
+
+  async function refreshTripInvites() {
+    if (!isTripManager() || !currentTripId) {
+      $("tripInviteList").innerHTML = "";
+      return;
+    }
+    const {data,error} = await client.rpc("list_trip_invites",{p_trip_id:currentTripId});
+    if(error) throw error;
+    $("tripInviteList").innerHTML = (data||[]).map((x)=>{
+      const used=x.use_count>=x.max_uses;
+      const expired=new Date(x.expires_at).getTime()<=Date.now();
+      const revoked=Boolean(x.revoked_at);
+      const label=revoked?"İptal":used?"Kullanıldı":expired?"Süresi doldu":"Bekliyor";
+      return `<div class="trip-invite-row"><span>Davet · ${new Date(x.created_at).toLocaleDateString("tr-TR")} <small>${label}</small></span>${(!revoked&&!used&&!expired)?`<button class="secondary invite-revoke" type="button" data-id="${x.id}">İptal Et</button>`:""}</div>`;
+    }).join("") || '<p class="muted small">Henüz davet oluşturulmadı.</p>';
+    $("tripInviteList").querySelectorAll(".invite-revoke").forEach((btn)=>
+      btn.addEventListener("click",()=>revokeInvite(btn.dataset.id)));
+  }
+
+  async function createInvite() {
+    if (!isTripManager() || !currentTripId) return;
+    clearMessage($("inviteManageMessage"));
+    $("createInviteBtn").disabled = true;
+    try {
+      const {data,error}=await client.rpc("create_trip_invite",{p_trip_id:currentTripId});
+      if (error) throw error;
+      const url=location.origin+location.pathname+"#invite="+data;
+      $("generatedInviteLink").value=url;
+      $("inviteShareBox").classList.remove("hidden");
+      await refreshTripInvites();
+      showMessage($("inviteManageMessage"),"success","Davet hazır. Bağlantıyı yalnız davet edeceğin kişiye gönder.");
+    } catch(err) {
+      showMessage($("inviteManageMessage"),"error",err.message || "Davet oluşturulamadı.");
+    } finally {$("createInviteBtn").disabled=false;}
+  }
+
+  async function copyInvite() {
+    const link=$("generatedInviteLink").value;
+    if(!link)return;
+    try {await navigator.clipboard.writeText(link);}
+    catch (_) { $("generatedInviteLink").select();document.execCommand("copy"); }
+    showToast("Davet bağlantısı kopyalandı.");
+  }
+  async function revokeInvite(id) {
+    if (!confirm("Bu davet bağlantısı iptal edilsin mi?")) return;
+    try {
+      const {error}=await client.rpc("revoke_trip_invite",{p_invitation_id:id});
+      if (error) throw error;
+      await refreshTripInvites();
+      showToast("Davet iptal edildi.");
+    } catch(err){showMessage($("inviteManageMessage"),"error",err.message);}
+  }
+
   async function bootstrapSession() {
     if (!isConfigured) {
       setScreen("setup");
@@ -232,6 +439,8 @@
       if (rememberedLogin && $("loginUser")) $("loginUser").value = rememberedLogin;
     } catch (_) {}
 
+    readInviteLink();
+    await previewPendingInvite().catch(() => undefined);
     const { data: { session } } = await client.auth.getSession();
     if (session?.user) await enterApp(session.user);
     else setScreen("auth");
@@ -333,6 +542,7 @@
     await loadTrips();
     switchPage(currentTripId ? "add" : "account");
     await loadBaseData();
+    renderInviteUI();
   }
 
   function renderTripHeader() {
@@ -341,15 +551,19 @@
     select.value = currentTripId || "";
     const trip = currentTrip();
     $("currentTripName").textContent = trip ? trip.name : "Henüz gezin yok";
-    $("currentTripSub").textContent = trip?.destination || "Yeni bir gezi oluşturarak başlayabilirsin.";
+    $("currentTripSub").textContent = trip ? (trip.destination || "Gezilerim") : "İlk gezini oluştur";
+    $("tripDateRange").textContent = trip && (trip.starts_on || trip.ends_on)
+      ? [trip.starts_on,trip.ends_on].filter(Boolean).map((d)=>String(d).split("-").reverse().join(".")).join(" – ")
+      : "";
     $("tripNoMembership").classList.toggle("hidden", Boolean(trip));
+    $("appScreen").classList.toggle("nontry-trip", Boolean(trip && trip.base_currency!=="TL"));
     $("appScreen").classList.toggle("no-trip", !trip);
     select.disabled = !availableTrips.length;
   }
 
   async function loadTrips(preferredId = null) {
     const { data, error } = await client.from("trips")
-      .select("id,name,destination,starts_on,ends_on,owner_id,created_at")
+      .select("id,name,destination,starts_on,ends_on,owner_id,created_at,base_currency,allowed_currencies")
       .order("created_at", { ascending: false });
     if (error) throw error;
     availableTrips = data || [];
@@ -371,6 +585,8 @@
     $("tripSelect").disabled = true;
     try {
       currentTripId = nextId;
+      $("inviteShareBox").classList.add("hidden");
+      $("generatedInviteLink").value="";
       renderTripHeader();
       clearFiltersWithoutRender();
       await loadBaseData();
@@ -400,6 +616,8 @@
     const destination = $("newTripDestination").value.trim();
     const starts = $("newTripStart").value || null;
     const ends = $("newTripEnd").value || null;
+    const chosenBase = $("newTripBaseCurrency").value;
+    const chosenCurrencies = readCurrencyChoices("newTripCurrencyChoices",chosenBase);
     if (starts && ends && starts > ends) {
       showMessage($("tripCreateMessage"), "error", "Bitiş başlangıçtan önce olamaz.");
       return;
@@ -408,8 +626,9 @@
     const btn = $("saveNewTripBtn");
     btn.disabled = true;
     try {
-      const { data, error } = await client.rpc("create_trip", {
-        p_name: name, p_destination: destination, p_starts_on: starts, p_ends_on: ends
+      const { data, error } = await client.rpc("create_trip_with_settings", {
+        p_name: name, p_destination: destination, p_starts_on: starts, p_ends_on: ends,
+        p_base_currency:chosenBase,p_currencies:chosenCurrencies
       });
       if (error) throw error;
       currentTripId = null;
@@ -418,6 +637,9 @@
       await loadBaseData();
       $("tripCreateModal").classList.add("hidden");
       $("newTripForm").reset();
+      $("inviteShareBox").classList.add("hidden");
+      $("generatedInviteLink").value="";
+      setupNewTripCurrencyForm();
       switchPage("add");
       showToast("Yeni gezi oluşturuldu. Üyeleri Hesabım'dan ekleyebilirsin.");
     } catch (error) {
@@ -498,7 +720,7 @@
       client.from("profiles").select("id,username,login_name,is_admin,is_active,created_at").order("username"),
       client.from("expense_versions").select("*").eq("trip_id", selectedTrip).order("created_at", { ascending: false }).limit(20000),
       client.from("settlement_versions").select("*").eq("trip_id", selectedTrip).order("created_at", { ascending: false }).limit(20000),
-      client.from("trip_display_rates").select("currency,tl_rate,updated_at,updated_by").eq("trip_id", selectedTrip)
+      client.from("trip_display_rates").select("currency,base_rate,tl_rate,updated_at,updated_by").eq("trip_id", selectedTrip)
     ]);
 
     if (selectedTrip !== currentTripId) return;
@@ -519,16 +741,16 @@
     currentSettlements = latestSettlementsFromVersions(allSettlementVersions);
 
     displayRateRows = rRes.data || [];
-    displayRates = { MYR: null, VND: null, USD: null, TL: 1 };
+    displayRates = Object.fromEntries(CURRENCIES.map(c=>[c,c===baseCurrency()?1:null]));
     displayRateRows.forEach((r) => {
-      if (Object.prototype.hasOwnProperty.call(displayRates, r.currency) && r.tl_rate !== null) {
-        displayRates[r.currency] = Number(r.tl_rate);
-      }
+      const rate=r.base_rate ?? (baseCurrency()==="TL" ? r.tl_rate : null);
+      if (CURRENCIES.includes(r.currency) && rate != null) displayRates[r.currency]=Number(rate);
     });
 
     persistLocalMirror();
     renderTripHeader();
     renderTripMembers();
+    renderCurrencySettings();
     $("adminDateFilters").classList.toggle("hidden", !isTripManager());
     populateSelectors();
     renderParticipantPickers();
@@ -536,9 +758,11 @@
     renderAdminUsers();
     renderReport();
     renderMyEntries();
+    refreshTripInvites().catch((err) => showMessage($("inviteManageMessage"),"error",err.message));
   }
 
   function populateSelectors() {
+    populateCurrencySelectors();
     const profileOptions = '<option value="">Tümü</option>' + allProfiles.map((p) => `<option value="${p.id}">${escapeHtml(p.username)}${p.is_active === false ? " (Pasif)" : ""}</option>`).join("");
     ["filterUser", "filterParticipant"].forEach((id) => {
       const old = $(id).value;
@@ -844,7 +1068,7 @@
     $("reportBody").innerHTML = visibleRows.map((e) => {
       const people = e.participant_ids.map((id) => `<span class="pill">${escapeHtml(profileName(id))}</span>`).join("");
       const tl = e.payment_type === "Kart" && e.currency !== "TL"
-        ? (e.card_tl_amount ? `${formatAmount(e.card_tl_amount, "TL")} TL` : '<span class="status-provisional">Bekliyor</span>')
+        ? (e.card_tl_amount ? `${formatAmount(e.card_tl_amount, "TL")} TL` : (baseCurrency()==="TL" ? '<span class="status-provisional">Bekliyor</span>' : "—"))
         : (e.currency === "TL" ? `${formatAmount(e.amount, "TL")} TL` : "—");
 
       return `<tr data-id="${e.expense_id}" class="${canManageExpense(e.expense_id) ? "admin-clickable" : ""}">
@@ -888,12 +1112,12 @@
     const approxMap = new Map();
 
     allProfiles.forEach((p) => {
-      map.set(p.id, { MYR: 0, VND: 0, USD: 0, TL: 0 });
+      map.set(p.id,Object.fromEntries(CURRENCIES.map(c=>[c,0])));
       approxMap.set(p.id, { minor: 0, missing: new Set() });
     });
 
     rows.forEach((e) => {
-      if (!map.has(e.payer_id)) map.set(e.payer_id, { MYR: 0, VND: 0, USD: 0, TL: 0 });
+      if (!map.has(e.payer_id)) map.set(e.payer_id,Object.fromEntries(CURRENCIES.map(c=>[c,0])));
       if (!approxMap.has(e.payer_id)) approxMap.set(e.payer_id, { minor: 0, missing: new Set() });
 
       map.get(e.payer_id)[e.currency] += Number(e.amount);
@@ -904,11 +1128,11 @@
         approx.missing.add(e.currency);
       } else {
         // Gezi yaklaşık toplamındakiyle aynı mantık: her harcama adminin genel kuru ile TL'ye çevrilir.
-        approx.minor += toMinor(Number(e.amount) * rate, "TL");
+        approx.minor += toMinor(Number(e.amount) * rate, baseCurrency());
       }
     });
 
-    const used = [...map.entries()].filter(([, totals]) => CURRENCIES.some((c) => totals[c] !== 0));
+    const used = [...map.entries()].filter(([, totals]) => tripCurrencies().some((c) => totals[c] !== 0));
     const grid = $("spendTotalsGrid");
     if (!used.length) {
       grid.className = "totals-grid empty-state";
@@ -925,10 +1149,10 @@
 
       return `<div class="total-card spend-total-card">
         <div class="total-user">${escapeHtml(profileName(id))}</div>
-        ${CURRENCIES.map((c) => `<div class="total-line"><span>${c}</span><strong>${formatAmount(totals[c], c)}</strong></div>`).join("")}
+        ${tripCurrencies().filter(c=>totals[c]!==0).map((c) => `<div class="total-line"><span>${moneyCode(c)}</span><strong>${formatAmount(totals[c], c)}</strong></div>`).join("")}
         <div class="spend-approx-total">
           <span>Toplam Yaklaşık Harcama</span>
-          <strong>${formatApproxTl(fromMinor(approx.minor, "TL"))}</strong>
+          <strong>${formatApproxTl(fromMinor(approx.minor, baseCurrency()))}</strong>
         </div>
         ${missingNote}
       </div>`;
@@ -936,15 +1160,16 @@
   }
 
   function rateFor(currency) {
-    return currency === "TL" ? 1 : Number(displayRates[currency] || 0);
+    return currency === baseCurrency() ? 1 : Number(displayRates[currency] || 0);
   }
 
   function formatApproxTl(value) {
-    const rounded = new Intl.NumberFormat("tr-TR", {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(Number(value || 0));
-    return `≈ ₺${rounded}`;
+    const currency=baseCurrency();
+    const rounded=new Intl.NumberFormat("tr-TR", {
+      minimumFractionDigits:0,
+      maximumFractionDigits:currency==="TL"||currency==="VND"||currency==="JPY"?0:2
+    }).format(Number(value||0));
+    return `≈ ${currency==="TL"?"₺":currency==="USD"?"$":currency==="EUR"?"€":""}${rounded} ${currency==="TL"?"":moneyCode(currency)}`.trim();
   }
 
   function calculateApproxTlDebts(rows, settlements = []) {
@@ -962,7 +1187,7 @@
 
       // Yaklaşık bölüm bilinçli olarak adminin girdiği genel kuru kullanır.
       // Kartın tekil kesin TL tutarı bu özet hesabına karışmaz.
-      const total = toMinor(Number(e.amount) * rate, "TL");
+      const total = toMinor(Number(e.amount) * rate, baseCurrency());
       const ids = [...e.participant_ids].sort();
       const n = ids.length;
       if (!n) return;
@@ -980,7 +1205,7 @@
         missing.add(x.currency);
         return;
       }
-      const total = toMinor(Number(x.amount) * rate, "TL");
+      const total = toMinor(Number(x.amount) * rate, baseCurrency());
       add(x.from_user_id, total);
       add(x.to_user_id, -total);
     });
@@ -1014,7 +1239,7 @@
     const warning = $("approxDebtWarning");
 
     if (missing.size) {
-      warning.textContent = `Yaklaşık hesap kısmi: ${[...missing].join(", ")} için admin kuru girilmemiş.`;
+      warning.textContent = `Yaklaşık hesap kısmi: ${[...missing].join(", ")} için gezi kuru girilmemiş.`;
       warning.classList.remove("hidden");
     } else {
       warning.classList.add("hidden");
@@ -1026,14 +1251,14 @@
       const outgoing = debts.filter((d) => d.debtor === p.id);
       const totalMinor = outgoing.reduce((sum, d) => sum + d.minor, 0);
       const lines = outgoing.length
-        ? outgoing.map((d) => `<div class="total-line approx-debt-line"><span>${escapeHtml(profileName(d.creditor))}</span><strong>${formatApproxTl(fromMinor(d.minor, "TL"))}</strong></div>`).join("")
+        ? outgoing.map((d) => `<div class="total-line approx-debt-line"><span>${escapeHtml(profileName(d.creditor))}</span><strong>${formatApproxTl(fromMinor(d.minor, baseCurrency()))}</strong></div>`).join("")
         : '<div class="approx-no-debt">Ödenecek yaklaşık borç yok</div>';
 
       return `<div class="total-card approx-debt-card ${p.is_active === false ? "inactive-profile-card" : ""}">
         <div class="total-user">${escapeHtml(p.username)}${p.is_active === false ? ' <span class="inactive-inline">Pasif</span>' : ""}</div>
         <div class="approx-card-caption">Kime yaklaşık ne kadar ödeyecek?</div>
         ${lines}
-        <div class="approx-total-line"><span>Toplam Yaklaşık Borcu</span><strong>${formatApproxTl(fromMinor(totalMinor, "TL"))}</strong></div>
+        <div class="approx-total-line"><span>Toplam Yaklaşık Borcu</span><strong>${formatApproxTl(fromMinor(totalMinor, baseCurrency()))}</strong></div>
       </div>`;
     }).join("");
   }
@@ -1048,29 +1273,28 @@
         missing.add(e.currency);
         return;
       }
-      totalMinor += toMinor(Number(e.amount) * rate, "TL");
+      totalMinor += toMinor(Number(e.amount) * rate, baseCurrency());
     });
 
-    $("tripApproxTotal").textContent = formatApproxTl(fromMinor(totalMinor, "TL"));
-    const rateParts = ["MYR", "VND", "USD"]
+    $("tripApproxTotal").textContent = formatApproxTl(fromMinor(totalMinor, baseCurrency()));
+    const rateParts = tripCurrencies().filter(c=>c!==baseCurrency())
       .filter((c) => rateFor(c))
-      .map((c) => `${c} ${rateFor(c).toLocaleString("tr-TR", { maximumFractionDigits: 8 })} TL`);
+      .map((c) => `${c} ${rateFor(c).toLocaleString("tr-TR", { maximumFractionDigits: 8 })} ${moneyCode(baseCurrency())}`);
     const missingText = missing.size ? ` • Eksik kur: ${[...missing].join(", ")}` : "";
     $("tripApproxMeta").textContent = `${rows.length} aktif harcama • ${rateParts.join(" • ") || "Kur bekleniyor"}${missingText}`;
   }
 
   function renderDisplayRateAdmin() {
     if (!isTripManager()) return;
-    ["MYR", "VND", "USD"].forEach((c) => {
-      const el = $(`rate${c}`);
-      if (el) el.value = displayRates[c] || "";
-    });
-
-    const latest = displayRateRows
-      .filter((r) => r.updated_at)
-      .sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))[0];
-    $("displayRatesUpdated").textContent = latest
-      ? `Son güncelleme: ${new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(latest.updated_at))}`
+    const base=baseCurrency();
+    $("dynamicRateFields").innerHTML=tripCurrencies()
+      .filter(c=>c!==base)
+      .map(c=>`<label><span>1 ${moneyCode(c)} kaç ${moneyCode(base)}?</span><input class="rate-entry" data-currency="${c}" type="number" min="0.00000000001" step="any" inputmode="decimal" placeholder="Kur gir" value="${displayRates[c] || ""}" /></label>`)
+      .join("") || '<p class="muted small">Tek para birimi seçildi; kur girmen gerekmiyor.</p>';
+    const latest=displayRateRows.filter(r=>r.updated_at)
+      .sort((a,b)=>new Date(b.updated_at)-new Date(a.updated_at))[0];
+    $("displayRatesUpdated").textContent=latest
+      ? `Son güncelleme: ${new Intl.DateTimeFormat("tr-TR",{dateStyle:"medium",timeStyle:"short"}).format(new Date(latest.updated_at))}`
       : "Henüz yaklaşık kur girilmedi.";
   }
 
@@ -1078,33 +1302,27 @@
     e.preventDefault();
     clearMessage($("displayRatesMessage"));
     if (!isTripManager()) return;
-    if (!navigator.onLine) {
-      showMessage($("displayRatesMessage"), "warning", "İnternet bağlantısı yok. Kurlar kaydedilmedi.");
+    const entries=[...$("dynamicRateFields").querySelectorAll(".rate-entry")]
+      .filter(el=>el.value.trim())
+      .map(el=>({currency:el.dataset.currency,rate:Number(el.value)}));
+    if (!entries.length || entries.some(x=>!Number.isFinite(x.rate)||x.rate<=0)) {
+      showMessage($("displayRatesMessage"),"error","En az bir geçerli, sıfırdan büyük kur gir.");
       return;
     }
-
-    const myr = Number($("rateMYR").value);
-    const vnd = Number($("rateVND").value);
-    const usd = Number($("rateUSD").value);
-    if (![myr, vnd, usd].every((x) => Number.isFinite(x) && x > 0)) {
-      showMessage($("displayRatesMessage"), "error", "MYR, VND ve USD için sıfırdan büyük TL karşılığı gir.");
-      return;
-    }
-
-    const btn = $("saveDisplayRatesBtn");
-    btn.disabled = true;
-    btn.textContent = "Kaydediliyor…";
+    const btn=$("saveDisplayRatesBtn");
+    btn.disabled=true;
     try {
-      const { error } = await client.rpc("set_trip_display_rates", { p_trip_id: currentTripId, p_myr: myr, p_vnd: vnd, p_usd: usd });
-      if (error) throw error;
+      for(const item of entries){
+        const {error}=await client.rpc("set_trip_currency_rate",{
+          p_trip_id:currentTripId,p_currency:item.currency,p_rate:item.rate
+        });
+        if(error)throw error;
+      }
       await loadBaseData();
-      showMessage($("displayRatesMessage"), "success", "✓ Yaklaşık TL kurları kaydedildi. Harcama kayıtları değiştirilmedi.");
-    } catch (err) {
-      showMessage($("displayRatesMessage"), "error", isNetworkLikeError(err) ? "Kurlar kaydedilemedi. Bağlantıyı kontrol et." : err.message);
-    } finally {
-      btn.disabled = false;
-      btn.textContent = "Yaklaşık Kurları Kaydet";
-    }
+      showMessage($("displayRatesMessage"),"success","Yaklaşık kurlar kaydedildi. Kesin borçlar değişmedi.");
+    } catch(err) {
+      showMessage($("displayRatesMessage"),"error",err.message || "Kur kaydedilemedi.");
+    } finally {btn.disabled=false;}
   }
 
   function toMinor(amount, currency) {
@@ -1131,10 +1349,10 @@
 
       if (e.payment_type === "Kart" && e.currency !== "TL") {
         if (e.card_tl_amount) {
-          currency = "TL";
-          amount = e.card_tl_amount;
-        } else {
-          provisional = true;
+          currency="TL";
+          amount=e.card_tl_amount;
+        } else if (baseCurrency()==="TL") {
+          provisional=true;
         }
       }
       if (provisional) provisionalCurrencies.add(currency);
@@ -1213,7 +1431,8 @@
   }
 
   function toggleTlField() {
-    const show = $("editPayment").value === "Kart" && $("editCurrency").value !== "TL";
+    const show = $("editPayment").value === "Kart" && $("editCurrency").value !== "TL"
+      && (baseCurrency()==="TL" || Boolean($("editCardTl").value));
     $("editTlWrap").classList.toggle("hidden", !show);
     if (!show) $("editCardTl").value = "";
   }
@@ -1584,7 +1803,14 @@
     window.addEventListener("offline", updateOnlineState);
     updateOnlineState();
 
+    setupNewTripCurrencyForm();
     $("authForm").addEventListener("submit", handleAuthSubmit);
+    $("showJoinRegisterBtn").addEventListener("click", ()=>$("joinRegisterForm").classList.toggle("hidden"));
+    $("joinRegisterForm").addEventListener("submit", registerWithInvite);
+    $("acceptInviteBtn").addEventListener("click", acceptInvite);
+    $("dismissInviteBtn").addEventListener("click", clearInvite);
+    $("createInviteBtn").addEventListener("click", createInvite);
+    $("copyInviteLinkBtn").addEventListener("click", copyInvite);
     $("tripSelect").addEventListener("change", switchTrip);
     $("newTripBtn").addEventListener("click", () => { clearMessage($("tripCreateMessage")); $("tripCreateModal").classList.remove("hidden"); });
     $("tripEmptyCreateBtn").addEventListener("click", () => { clearMessage($("tripCreateMessage")); $("tripCreateModal").classList.remove("hidden"); });
@@ -1640,6 +1866,17 @@
     $("createUserForm").addEventListener("submit", createUser);
     $("passwordAdminForm").addEventListener("submit", changeUserPassword);
     $("displayRatesForm").addEventListener("submit", saveDisplayRates);
+    $("tripCurrencySettingsForm").addEventListener("submit", saveTripCurrencySettings);
+    $("newTripBaseCurrency").addEventListener("change",()=> {
+      const base=$("newTripBaseCurrency").value;
+      const choice=$("newTripCurrencyChoices").querySelector(`input[value="${base}"]`);
+      if(choice)choice.checked=true;
+    });
+    $("tripBaseCurrencySettings").addEventListener("change",()=> {
+      const base=$("tripBaseCurrencySettings").value;
+      const choice=$("tripAllowedCurrencyChoices").querySelector(`input[value="${base}"]`);
+      if(choice)choice.checked=true;
+    });
     $("backupJsonBtn").addEventListener("click", downloadFullBackup);
     $("exportCsvBtn").addEventListener("click", exportCsv);
     $("accountLogoutBtn").addEventListener("click", logout);

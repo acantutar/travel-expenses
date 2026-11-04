@@ -1,0 +1,10 @@
+# Supabase Edge Function deployment settings for TripSplit.
+# Invite-only signup validates a secret invitation inside the handler, so platform JWT is off.
+[functions.join-register]
+verify_jwt = false
+
+[functions.admin-users]
+verify_jwt = true
+
+[functions.admin-set-password]
+verify_jwt = true
