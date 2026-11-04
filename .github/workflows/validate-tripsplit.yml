@@ -25,13 +25,20 @@ jobs:
           refs = set(re.findall(r'\$\("([\w-]+)"\)', js))
           ids = set(re.findall(r'id="([\w-]+)"', html))
           assert not (refs - ids), f"Missing HTML elements: {refs - ids}"
-          assert "app.js?v=4.0" in html
-          assert "styles.css?v=4.0" in html
+          assert "app.js?v=4.1" in html
+          assert "styles.css?v=4.1" in html
           for key in ("create_trip", "create_trip_expense", "create_trip_settlement",
-                      "trip_members", "trip_display_rates", "tripSelect", "set_trip_member_active"):
+                      "trip_members", "trip_display_rates", "tripSelect", "set_trip_member_active",
+                      "join-register", "create_trip_invite", "preview_trip_invite",
+                      "redeem_trip_invite", "create_trip_with_settings", "set_trip_currency_rate",
+                      "newTripBaseCurrency", "tripAllowedCurrencyChoices"):
               assert key in (js + html), key
           assert len(ids) == len(re.findall(r'id="([\w-]+)"', html)), "Duplicate HTML ids"
+          assert "SERVICE_ROLE_KEY" not in js, "Server credentials must not be in frontend"
+          assert "newTripCurrencyChoices" in html
+          assert "inviteAcceptance" in html
+          assert "joinRegisterForm" in html
           sql=Path("migrations/v4_multitrip.sql").read_text()
           assert "enable row level security" in sql
-          print("TripSplit v4 static checks passed")
+          print("TripSplit v4.1 static checks passed")
           PY
