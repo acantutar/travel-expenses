@@ -556,6 +556,7 @@
       ? [trip.starts_on,trip.ends_on].filter(Boolean).map((d)=>String(d).split("-").reverse().join(".")).join(" – ")
       : "";
     $("tripNoMembership").classList.toggle("hidden", Boolean(trip));
+    $("appScreen").classList.toggle("nontry-trip", Boolean(trip && trip.base_currency!=="TL"));
     $("appScreen").classList.toggle("no-trip", !trip);
     select.disabled = !availableTrips.length;
   }
@@ -1426,7 +1427,8 @@
   }
 
   function toggleTlField() {
-    const show = $("editPayment").value === "Kart" && $("editCurrency").value !== "TL";
+    const show = $("editPayment").value === "Kart" && $("editCurrency").value !== "TL"
+      && (baseCurrency()==="TL" || Boolean($("editCardTl").value));
     $("editTlWrap").classList.toggle("hidden", !show);
     if (!show) $("editCardTl").value = "";
   }
