@@ -1,38 +1,45 @@
-# TripSplit v3 - Kurulum
+# TripSplit v4.1 — Kurulum ve işletim
 
-## 1) Database
-Supabase > SQL Editor > New query içinde `schema.sql` dosyasının tamamını çalıştır.
+Bu belge sistemin mevcut mimarisini açıklar. **Canlı Supabase projesinde SQL migrations zaten uygulanmıştır.**
+Canlı veritabanına `schema.sql` veya migration dosyalarını gelişigüzel tekrar çalıştırmayın.
 
-## 2) Yeni kullanıcı kaydını kapat
-Supabase Authentication ayarlarında **Allow new users to sign up** seçeneğini kapat. Uygulamada zaten "Hesap Oluştur" ekranı yoktur.
+## Altyapı
+- Statik GitHub Pages: `index.html`, `app.js`, `styles.css`, `config.js`
+- Supabase Auth: kullanıcı adı + şifre (Auth içindeki dahili `@travel-expenses.app` kimliği)
+- Veritabanı: `profiles`, `trips`, `trip_members`, `expense_versions`, `settlement_versions`, `trip_display_rates`, `trip_invitations`
+- Edge Functions: `admin-users` (admin işlemleri), `admin-set-password` (eski arayüz uyumu), `join-register` (davetli kayıt)
 
-## 3) Dört kullanıcıyı Supabase Dashboard'dan oluştur
-Authentication > Users > Add user üzerinden aşağıdaki dahili e-postaları kullan:
+## Davetler — e-posta servisi gerekmez
+Gezi sahibi/yöneticisi `Hesabım → Gezi Üyeleri` üzerinden tek kullanımlık, 7 günlük davet oluşturur.
+Davet bağlantısı `#invite=<token>` biçimindedir; token hash'i veritabanında saklanır.
+Bir kişi bu linki açtığında:
+1. Mevcut hesabı varsa giriş yapıp daveti kabul eder.
+2. Hesabı yoksa adını ve şifresini kendisi belirler; `join-register` fonksiyonu yalnız geçerli token ile hesap açar.
+3. Davet kabul edilince `trip_members` kaydı oluşturulur.
 
-- ACT: `act@travel-expenses.app`
-- Büşra: `busra@travel-expenses.app`
-- Fatma: `fatma@travel-expenses.app`
-- Sena: `sena@travel-expenses.app`
+Önemli: **Şu anda gerçek e-posta doğrulaması, otomatik davet e-postası ve şifre kurtarma e-postası yok.**
+Yeni kişilerin gerçek e-posta adresini doğrulamış gibi kabul etmeyin. Kullanıcıların şifrelerini saklamaları gerekir.
+Supabase Auth ayarlarında açık anonim kayıt zorunlu değildir; kayıtlar Edge Function üzerinden davet kontrollüdür.
 
-Şifreleri public GitHub repository'ye veya herhangi bir dosyaya yazma. Dashboard'da kullanıcıları oluştururken daha önce belirlediğin şifreleri gir ve kullanıcıların e-posta doğrulaması gerektirmeden giriş yapabildiğinden emin ol.
+## Para birimleri
+Her gezinin `base_currency` ve `allowed_currencies` ayarları bulunur.
+- Kesin borçlar kaynağın para biriminde kalır; kendi kendine tek para birimine çevrilmez.
+- Yaklaşık raporlar ana para biriminde ve yöneticinin girdiği `trip_display_rates.base_rate` değerleriyle hesaplanır.
+- Eski Vietnam/Malezya gezisinin TL bazlı verileri ve önce kesinleşen kart TL tutarları korunur.
+- Ana para birimi değişirse yaklaşık kurlar tekrar girilmelidir.
 
-ACT profili schema trigger'ı tarafından otomatik Admin yapılır.
+## Şema kaynakları
+Mevcut GitHub deposu başlangıçta v3 şema dosyasını içeriyordu. v3.11 ve v4.0 değişiklikleri
+Supabase proje migration history'sinde mevcuttur. v4.1 değişikliklerinin kaynak kopyası:
+`migrations/v4_1_invites_currencies.sql`. Bu dosya **v4.0 şeması üzerine** uygulanmalıdır; v3'e doğrudan uygulanmamalıdır.
 
-## 4) Admin'in kullanıcı şifresi değiştirebilmesi için Edge Function
-Supabase > Edge Functions > Deploy a new function > Via Editor.
+## Güvenlik
+Tarayıcı yalnızca Supabase publishable key'i kullanır.
+`SUPABASE_SERVICE_ROLE_KEY` yalnız sunucu fonksiyon ortamında tutulur.
+Edge Function JWT ayarları `supabase/config.toml` içindedir.
+`join-register` anonim çağrılabilir ancak yalnızca doğrulanan davet tokenı ile kullanıcı oluşturur.
+Gezi verileri RLS ile yalnız üyelere görünür; admin veya gezi sahibi bu kuralları kendi uygulama yetkileriyle yönetir.
 
-Function name: `admin-set-password`
-
-`supabase/functions/admin-set-password/index.ts` içeriğini editöre yapıştır ve deploy et.
-Service-role anahtarını hiçbir zaman GitHub'a veya frontend'e koyma; Supabase Edge Function ortamında server-side secret olarak kullanılır.
-
-## 5) GitHub Pages
-Repository root'una şu dosyaları koy:
-
-- `index.html`
-- `styles.css`
-- `app.js`
-- `config.js`
-- `schema.sql`
-
-GitHub > Settings > Pages > Deploy from a branch > `main` / `(root)`.
+## Yayın
+Değişiklikler test edilen GitHub pull request üzerinden `main` dalına alınır.
+GitHub Actions statik testleri (JS syntax, HTML ID'leri, sürüm etiketleri) ve Pages deploy sonucunu kontrol edin.
