@@ -4,11 +4,11 @@
 set -Eeuo pipefail
 umask 077
 
-: "\${PG_URI:?Set PG_URI to a PostgreSQL session-pooler or direct database URI}"
-: "\${AGE_RECIPIENT:?Set AGE_RECIPIENT to an age1... public recipient}"
-: "\${BACKUP_OUTPUT_DIR:?Set BACKUP_OUTPUT_DIR to an output directory}"
+: "${PG_URI:?Set PG_URI to a PostgreSQL session-pooler or direct database URI}"
+: "${AGE_RECIPIENT:?Set AGE_RECIPIENT to an age1... public recipient}"
+: "${BACKUP_OUTPUT_DIR:?Set BACKUP_OUTPUT_DIR to an output directory}"
 
-if [[ ! "\${AGE_RECIPIENT}" =~ ^age1[0-9a-z]+$ ]]; then
+if [[ ! "${AGE_RECIPIENT}" =~ ^age1[0-9a-z]+$ ]]; then
   echo "Invalid age recipient. Use the age1... public key, not the private identity." >&2
   exit 2
 fi
@@ -17,7 +17,7 @@ command -v age >/dev/null
 command -v tar >/dev/null
 command -v sha256sum >/dev/null
 
-mkdir -p "\${BACKUP_OUTPUT_DIR}"
+mkdir -p "${BACKUP_OUTPUT_DIR}"
 work="$(mktemp -d)"
 trap 'rm -rf -- "$work"' EXIT
 
@@ -55,7 +55,7 @@ printf 'format=pg_dump_custom\npostgres_major=17\nschemas=public,app_private,aut
   sha256sum tripsplit.dump > SHA256SUMS
 )
 
-outfile="\${BACKUP_OUTPUT_DIR%/}/tripsplit-$(date -u +%Y%m%dT%H%M%SZ).tar.age"
+outfile="${BACKUP_OUTPUT_DIR%/}/tripsplit-$(date -u +%Y%m%dT%H%M%SZ).tar.age"
 if [[ -e "$outfile" ]]; then
   echo "Refusing to overwrite an existing backup file." >&2
   exit 1
