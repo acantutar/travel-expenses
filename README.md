@@ -1,10 +1,14 @@
 # TripSplit
 
+**v4.2:** Eşit platform hesapları, geziye özel yönetim, aranabilir para birimi kataloğu ve kişisel favoriler.
+
 TripSplit, arkadaş grupları için gezilere özel ortak harcama, borç ve ödeme takibi uygulamasıdır.
 
 ## Özellikler (v4.1)
 
+- Her kullanıcının kendi gezisini oluşturabilmesi; ayrıcalıklı platform admini yok
 - Bir kullanıcı hesabıyla birden fazla gezi oluşturma ve yönetme
+- Yaklaşık 159 para birimi içinde kod/isim arama; kişiye özel favoriler
 - Gezide kullanılacak para birimlerini ve ana raporlama para birimini seçme
 - Kesin borçları kendi para biriminde tutma, yaklaşık özetleri gezi ana para biriminde hesaplama
 - Yönetici tarafından yaklaşık döviz kurlarını belirleme
@@ -21,6 +25,10 @@ Gezi yöneticisi **Hesabım → Gezi Üyeleri → Arkadaş Davet Et** bölümün
 Yeni gelen kullanıcı bağlantı üzerinden adını ve şifresini seçer. Gerçek e-posta adresi toplama, e-posta doğrulama, otomatik e-posta gönderimi ve e-postayla şifre kurtarma henüz **aktif değildir**. Supabase Auth içinde bu yeni hesapların adresi uygulamaya özel dahili bir giriş kimliğidir; gerçek e-posta olarak kullanılmamalıdır.
 
 Eski ACT / Büşra / Fatma / Sena hesapları ve önceki ledger kayıtları korunur.
+
+## Arayüz
+
+Üstte tek, kompakt gezi seçici bulunur. Eski büyük/tekrarlanan gezi paneli kaldırılmıştır. Kişisel şifre değiştirme ve favoriler **Hesabım** sayfasındadır.
 
 ## Teknik yapı
 
@@ -39,3 +47,7 @@ Kurulum ve geçiş sırasını `SETUP.md` açıklar. GitHub'daki eski `schema.sq
 - Bir kişinin hesabına sahip olmak onu bütün gezilerin üyesi yapmaz.
 - E-posta altyapısı kurulana kadar hesap kurtarma için yönetici desteği gerekir.
 - Yaklaşık FX raporları kullanıcı tarafından girilen kurlara dayanır; harcama kayıtlarını ve kesin borçları otomatik değiştirmez.
+
+## V4.2 geliştirme brief'i
+
+Bkz. [docs/tripsplit-v4.2-brief.md](docs/tripsplit-v4.2-brief.md). Şema değişiklikleri [migrations/v4_2_permissions_currencies.sql](migrations/v4_2_permissions_currencies.sql) içinde sürümlenmiştir.
