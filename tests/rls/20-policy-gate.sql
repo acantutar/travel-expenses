@@ -11,7 +11,7 @@ begin
     'settlement_versions','trip_display_rates','profiles'] loop
     if not exists (
       select 1 from pg_policies p where p.schemaname='public'
-      and p.tablename=tbl and p.cmd='SELECT' and p.roles @> array['authenticated']
+      and p.tablename=tbl and p.cmd='SELECT' and 'authenticated' = any(p.roles)
     ) then raise exception 'Missing authenticated RLS SELECT policy: %',tbl; end if;
     if (select count(*) from pg_policies p where p.schemaname='public'
         and p.tablename=tbl and p.cmd='SELECT')<>1
