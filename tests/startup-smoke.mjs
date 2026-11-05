@@ -89,7 +89,7 @@ try {
     };
     window.supabase={createClient(){return{
       from:query,
-      rpc:async(name)=>({data:name==="list_trip_invites"?[]:null,error:null}),
+      rpc:async(name,params)=>{ window.__tripRpcCalls=(window.__tripRpcCalls||[]).concat([{name,params}]); return {data:name==="list_trip_invites"?[]:name==="create_trip_with_settings"?tripId:null,error:null}; },
       auth:{
         getSession:async()=>({data:{session:{user:{id:uid}}},error:null}),
         onAuthStateChange:()=>({data:{subscription:{unsubscribe(){}}}})
@@ -112,5 +112,38 @@ try {
     throw new Error("SIGNED-IN BOOT FAILED: "+JSON.stringify({signedResult,signedErrors}));
   }
   console.log("PASS signed-in app startup with mock database: "+JSON.stringify(signedResult));
+
+  // The quick-start modal asks for a trip name only; optional settings stay hidden.
+  await signedIn.click("#newTripBtn");
+  const quickStart=await signedIn.evaluate(()=>{
+    const advanced=document.getElementById("newTripAdvanced");
+    const currencies=[...document.querySelectorAll("#newTripCurrencyChoices input[type=checkbox]:checked")]
+      .map(node=>node.value);
+    return {
+      modalVisible:!document.getElementById("tripCreateModal").classList.contains("hidden"),
+      advancedClosed:!advanced.open,
+      destinationHidden:document.getElementById("newTripDestination").closest("details")?.open === false,
+      base:document.getElementById("newTripBaseCurrency").value,
+      selected:currencies,
+      focused:document.activeElement?.id
+    };
+  });
+  if(!quickStart.modalVisible || !quickStart.advancedClosed || !quickStart.destinationHidden
+      || quickStart.base!=="TL" || JSON.stringify(quickStart.selected)!=='["TL"]'
+      || quickStart.focused!=="newTripName"){
+    throw new Error("QUICK TRIP DEFAULTS FAILED: "+JSON.stringify({quickStart,signedErrors}));
+  }
+  await signedIn.fill("#newTripName","Hafta sonu gezisi");
+  await signedIn.click("#saveNewTripBtn");
+  await signedIn.waitForFunction(()=>Boolean(window.__tripRpcCalls?.some(c=>c.name==="create_trip_with_settings")),
+    null,{timeout:10000});
+  const createCall=await signedIn.evaluate(()=>window.__tripRpcCalls.find(c=>c.name==="create_trip_with_settings"));
+  if(createCall.params.p_name!=="Hafta sonu gezisi" ||
+     createCall.params.p_base_currency!=="TL" ||
+     JSON.stringify(createCall.params.p_currencies)!=='["TL"]' ||
+     createCall.params.p_destination!==""){
+    throw new Error("QUICK TRIP RPC FAILED: "+JSON.stringify({createCall,signedErrors}));
+  }
+  console.log("PASS one-field trip create calls real RPC with TL defaults: "+JSON.stringify(createCall.params));
   await signedIn.close();
 } finally {await browser.close();}
