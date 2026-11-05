@@ -153,6 +153,26 @@
       if(add)button.disabled=!favoriteCurrencyCandidate;
     }
   }
+  function selectedCurrencyList(containerId) {
+    const state = currencySelectionState[containerId] || new Set();
+    return CURRENCIES.filter((code) => state.has(code));
+  }
+
+  function syncBaseCurrencySelect(containerId) {
+    const selectId = containerId === "newTripCurrencyChoices"
+      ? "newTripBaseCurrency" : "tripBaseCurrencySettings";
+    const select = $(selectId);
+    if (!select) return;
+    const previous = select.value;
+    const selected = selectedCurrencyList(containerId);
+    // Keep at least one option available when creating a trip.
+    const options = selected.length ? selected : ["TL"];
+    select.innerHTML = options.map((code) =>
+      '<option value="' + code + '">' + escapeHtml(CURRENCY_NAMES[code] || moneyCode(code)) + '</option>'
+    ).join("");
+    select.value = options.includes(previous) ? previous : options[0];
+  }
+
   function renderCurrencyChoiceOptions(containerId) {
     const root=$(containerId),state=currencySelectionState[containerId];
     if(!state)return;
