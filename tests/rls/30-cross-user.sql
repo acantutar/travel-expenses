@@ -14,7 +14,7 @@ grant execute on function test.assert(boolean,text) to authenticated;
 -- The nested exception block captures only the attempted RPC. An assertion
 -- failure outside it cannot be mistaken for an expected denied RPC.
 create function test.expect_denied(command text, expected_message text, label text)
-returns void language plpgsql as $
+returns void language plpgsql as $guard$
 declare actual_message text; actual_state text;
 begin
   begin
@@ -28,7 +28,7 @@ begin
     return;
   end;
   raise exception 'Unauthorized operation unexpectedly succeeded: %',label;
-end $;
+end $guard$;
 grant execute on function test.expect_denied(text,text,text) to authenticated;
 
 -- Both identities also belong to the historical legacy trip because the
