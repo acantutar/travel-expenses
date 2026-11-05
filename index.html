@@ -291,38 +291,6 @@
           <button id="accountLogoutBtn" class="secondary full-button" type="button">Çıkış Yap</button>
         </div>
 
-        <div class="panel">
-          <div class="section-title"><div><h3>Şifremi Değiştir</h3>
-            <p>Şifreni yalnızca sen değiştirebilirsin. E-posta ile kurtarma henüz yok.</p></div></div>
-          <form id="selfPasswordForm" class="stack">
-            <label><span>Yeni şifre</span><input id="selfNewPassword" type="password" minlength="10" autocomplete="new-password" required /></label>
-            <label><span>Yeni şifre (tekrar)</span><input id="selfNewPasswordRepeat" type="password" minlength="10" autocomplete="new-password" required /></label>
-            <button id="selfPasswordSave" class="secondary" type="submit">Şifremi Güncelle</button>
-          </form>
-          <div id="selfPasswordMessage" class="message hidden"></div>
-        </div>
-        <div class="panel">
-          <div class="section-title"><div><h3>Favori Para Birimlerim</h3>
-            <p>Yalnızca senin hesabında görünür. Gezinin para birimlerini kendiliğinden değiştirmez.</p></div></div>
-          <div class="favorite-currency-add">
-            <label class="favorite-currency-input"><span>Para birimi ara</span>
-              <input id="favoriteCurrencySearch" type="search" autocomplete="off"
-                aria-label="Favorilerime eklemek için para birimi ara" placeholder="Örn. RSD, Dinar, Gürcistan..." />
-            </label>
-            <button id="addFavoriteCurrencyBtn" class="secondary" type="button" disabled>Favorilere ekle</button>
-          </div>
-          <div id="favoriteCurrencyResults" class="favorite-currency-results hidden" aria-label="Para birimi arama sonuçları"></div>
-          <div id="favoriteCurrencyList" class="favorite-currency-list"></div>
-          <div id="favoriteCurrencyMessage" class="message hidden"></div>
-        </div>
-        <div class="panel">
-          <div class="section-title"><div><h3>Gezi Verilerim</h3>
-            <p>Seçili gezinin kayıtlarını ve revizyon geçmişini dışa aktar.</p></div></div>
-          <div class="admin-tools">
-            <button id="backupJsonBtn" class="secondary" type="button">Gezi Yedeği (JSON)</button>
-            <button id="exportCsvBtn" class="secondary" type="button">CSV İndir</button>
-          </div>
-        </div>
         <div id="tripMembersPanel" class="panel hidden">
           <div class="section-title"><div><h3>Gezi Üyeleri</h3><p id="accountTripName">—</p></div><span id="accountTripRole" class="count-pill">—</span></div>
           <div id="tripMembersList" class="trip-member-list"></div>
@@ -360,6 +328,38 @@
             <div id="displayRatesMessage" class="message hidden"></div>
             <p id="displayRatesUpdated" class="backup-note">Henüz yaklaşık kur girilmedi.</p>
           </div>
+        <div class="panel">
+          <div class="section-title"><div><h3>Şifremi Değiştir</h3>
+            <p>Şifreni yalnızca sen değiştirebilirsin. E-posta ile kurtarma henüz yok.</p></div></div>
+          <form id="selfPasswordForm" class="stack">
+            <label><span>Yeni şifre</span><input id="selfNewPassword" type="password" minlength="10" autocomplete="new-password" required /></label>
+            <label><span>Yeni şifre (tekrar)</span><input id="selfNewPasswordRepeat" type="password" minlength="10" autocomplete="new-password" required /></label>
+            <button id="selfPasswordSave" class="secondary" type="submit">Şifremi Güncelle</button>
+          </form>
+          <div id="selfPasswordMessage" class="message hidden"></div>
+        </div>
+        <div class="panel">
+          <div class="section-title"><div><h3>Favori Para Birimlerim</h3>
+            <p>Yalnızca senin hesabında görünür. Gezinin para birimlerini kendiliğinden değiştirmez.</p></div></div>
+          <div class="favorite-currency-add">
+            <label class="favorite-currency-input"><span>Para birimi ara</span>
+              <input id="favoriteCurrencySearch" type="search" autocomplete="off"
+                aria-label="Favorilerime eklemek için para birimi ara" placeholder="Örn. RSD, Dinar, Gürcistan..." />
+            </label>
+            <button id="addFavoriteCurrencyBtn" class="secondary" type="button" disabled>Favorilere ekle</button>
+          </div>
+          <div id="favoriteCurrencyResults" class="favorite-currency-results hidden" aria-label="Para birimi arama sonuçları"></div>
+          <div id="favoriteCurrencyList" class="favorite-currency-list"></div>
+          <div id="favoriteCurrencyMessage" class="message hidden"></div>
+        </div>
+        <div class="panel">
+          <div class="section-title"><div><h3>Gezi Verilerim</h3>
+            <p>Seçili gezinin kayıtlarını ve revizyon geçmişini dışa aktar.</p></div></div>
+          <div class="admin-tools">
+            <button id="backupJsonBtn" class="secondary" type="button">Gezi Yedeği (JSON)</button>
+            <button id="exportCsvBtn" class="secondary" type="button">CSV İndir</button>
+          </div>
+        </div>
       </section>
 
       <nav class="bottom-nav" aria-label="Ana menü">
@@ -373,7 +373,7 @@
 
   <div id="tripCreateModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-label="Yeni gezi oluştur">
     <div class="modal">
-      <div class="modal-head"><div><div class="eyebrow">TripSplit v4</div><h2>Yeni Gezi</h2><p class="muted small">Gezinin sahibi sen olursun. Katılımcıları daha sonra ekleyebilirsin.</p></div><button id="closeTripCreateModal" class="icon-button" type="button" aria-label="Kapat">×</button></div>
+      <div class="modal-head"><div><div class="eyebrow">Gezi oluştur</div><h2>Yeni Gezi</h2><p class="muted small">Gezinin sahibi sen olursun. Katılımcıları daha sonra ekleyebilirsin.</p></div><button id="closeTripCreateModal" class="icon-button" type="button" aria-label="Kapat">×</button></div>
       <form id="newTripForm" class="stack">
         <div class="trip-form-stage"><span class="trip-stage-index">1</span><strong>Gezi bilgileri</strong></div>
         <label><span>Gezi Adı</span><input id="newTripName" maxlength="100" placeholder="Örn. Tayland 2027" required /></label>
