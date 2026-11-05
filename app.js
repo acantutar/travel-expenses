@@ -11,6 +11,7 @@
   let CURRENCIES = [...RECOMMENDED_CURRENCIES];
   let CURRENCY_NAMES = { TL: "TRY · Türk lirası" };
   let personalCurrencyFavorites = new Set();
+  let favoriteCurrencyCandidate = null;
   const currencySelectionState = Object.create(null);
   function currencyDigits(code) {
     try {
@@ -83,22 +84,50 @@
     CURRENCIES = preferredCurrencyOrder(CURRENCIES);
     renderPersonalFavorites();
   }
+  function renderFavoriteSearchResults() {
+    const input=$("favoriteCurrencySearch"), root=$("favoriteCurrencyResults");
+    if(!input || !root)return;
+    const term=input.value.trim().toLocaleLowerCase("tr-TR");
+    if(!term || favoriteCurrencyCandidate) {
+      root.classList.add("hidden");
+      root.innerHTML="";
+      return;
+    }
+    const options=CURRENCIES.filter(c=>
+      !personalCurrencyFavorites.has(c) &&
+      (c.toLocaleLowerCase("tr-TR").includes(term)
+        || String(CURRENCY_NAMES[c]||"").toLocaleLowerCase("tr-TR").includes(term))
+    ).slice(0,10);
+    root.innerHTML=options.map(c=>
+      '<button type="button" class="currency-result" data-currency="'+c+'">'
+      +'<span><strong>'+moneyCode(c)+'</strong><small>'
+      +escapeHtml(String(CURRENCY_NAMES[c]||c).split(" · ").slice(1).join(" · "))+'</small></span>'
+      +'<span class="currency-result-action">Seç</span></button>'
+    ).join("") || '<p class="muted small currency-empty-result">Eklenecek farklı bir para birimi bulunamadı.</p>';
+    root.classList.remove("hidden");
+    root.querySelectorAll("button[data-currency]").forEach(btn=>btn.addEventListener("click",()=>{
+      favoriteCurrencyCandidate=btn.dataset.currency;
+      input.value=CURRENCY_NAMES[favoriteCurrencyCandidate]||favoriteCurrencyCandidate;
+      $("addFavoriteCurrencyBtn").disabled=false;
+      root.classList.add("hidden");
+      root.innerHTML="";
+    }));
+  }
   function renderPersonalFavorites() {
-    const select=$("favoriteCurrencySelect"), list=$("favoriteCurrencyList");
-    if (!select || !list) return;
-    const old=select.value;
-    select.innerHTML=CURRENCIES.map(c=>'<option value="'+c+'">'+escapeHtml(CURRENCY_NAMES[c]||c)+'</option>').join("");
-    if(CURRENCIES.includes(old)) select.value=old;
+    const list=$("favoriteCurrencyList");
+    if(!list)return;
     list.innerHTML=[...personalCurrencyFavorites].map(c=>'<span class="favorite-currency-chip">'
       +escapeHtml(CURRENCY_NAMES[c]||c)
-      +'<button type="button" data-currency="'+c+'" aria-label="Favorilerimden çıkar">×</button></span>').join("")
-      ||'<p class="muted small">Henüz favori eklenmedi.</p>';
+      +'<button type="button" data-currency="'+c+'" aria-label="'+moneyCode(c)+' favorilerimden çıkar">×</button></span>').join("")
+      ||'<p class="muted small">Henüz favori para birimin yok. Yukarıdan arayarak ekleyebilirsin.</p>';
     list.querySelectorAll("button[data-currency]").forEach(btn=>
       btn.addEventListener("click",()=>changeFavoriteCurrency(btn.dataset.currency,false)));
   }
   async function changeFavoriteCurrency(currency, add) {
     if(!currentProfile || !CURRENCIES.includes(currency))return;
     clearMessage($("favoriteCurrencyMessage"));
+    const button=$("addFavoriteCurrencyBtn");
+    if(add)button.disabled=true;
     try {
       if(add && personalCurrencyFavorites.has(currency)) {
         showMessage($("favoriteCurrencyMessage"),"success","Bu para birimi zaten favorilerinde.");
@@ -109,23 +138,20 @@
         : client.from("user_currency_favorites").delete().eq("user_id",currentProfile.id).eq("currency",currency);
       const {error}=await query;
       if(error)throw error;
-      if(add)personalCurrencyFavorites.add(currency);
-      else personalCurrencyFavorites.delete(currency);
+      if(add) {
+        personalCurrencyFavorites.add(currency);
+        favoriteCurrencyCandidate=null;
+        $("favoriteCurrencySearch").value="";
+      } else {
+        personalCurrencyFavorites.delete(currency);
+      }
       renderPersonalFavorites();
-      showMessage($("favoriteCurrencyMessage"),"success","Yalnız senin favori listen güncellendi.");
-    } catch(err) {showMessage($("favoriteCurrencyMessage"),"error",err?.message||"Favori kaydedilemedi.");}
-  }
-  function selectedCurrencyList(containerId) {
-    const state=currencySelectionState[containerId] || new Set();
-    return CURRENCIES.filter(c=>state.has(c));
-  }
-  function syncBaseCurrencySelect(containerId) {
-    const selectId=containerId==="newTripCurrencyChoices"?"newTripBaseCurrency":"tripBaseCurrencySettings";
-    const select=$(selectId), old=select.value;
-    const selected=selectedCurrencyList(containerId);
-    const codes=selected.length ? selected : ["TL"];
-    select.innerHTML=codes.map(c=>'<option value="'+c+'">'+escapeHtml(CURRENCY_NAMES[c]||c)+'</option>').join("");
-    select.value=codes.includes(old)?old:codes[0];
+      showMessage($("favoriteCurrencyMessage"),"success","Favori listen güncellendi. Diğer kullanıcıların seçimi değişmedi.");
+    } catch(err) {
+      showMessage($("favoriteCurrencyMessage"),"error",err?.message||"Favori kaydedilemedi.");
+    } finally {
+      if(add)button.disabled=!favoriteCurrencyCandidate;
+    }
   }
   function renderCurrencyChoiceOptions(containerId) {
     const root=$(containerId),state=currencySelectionState[containerId];
@@ -1942,7 +1968,12 @@
 
     $("selfPasswordForm").addEventListener("submit", changeOwnPassword);
     $("addFavoriteCurrencyBtn").addEventListener("click",()=>{
-      changeFavoriteCurrency($("favoriteCurrencySelect").value,true);
+      if(favoriteCurrencyCandidate) changeFavoriteCurrency(favoriteCurrencyCandidate,true);
+    });
+    $("favoriteCurrencySearch").addEventListener("input",()=>{
+      favoriteCurrencyCandidate=null;
+      $("addFavoriteCurrencyBtn").disabled=true;
+      renderFavoriteSearchResults();
     });
     $("displayRatesForm").addEventListener("submit", saveDisplayRates);
     $("tripCurrencySettingsForm").addEventListener("submit", saveTripCurrencySettings);
