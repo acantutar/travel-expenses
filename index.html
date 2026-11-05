@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <title>TripSplit</title>
-  <link rel="stylesheet" href="styles.css?v=4.1" />
+  <link rel="stylesheet" href="styles.css?v=4.2" />
 </head>
 <body>
   <div id="offlineBanner" class="offline-banner hidden">İnternet yok — yeni kayıt veya değişiklik kaydedilemez.</div>
@@ -52,12 +52,19 @@
     </section>
 
     <section id="appScreen" class="screen hidden">
-      <header class="mobile-header">
-        <div><div class="brand-line"><span>TripSplit</span><span class="brand-emoji">✈️</span></div>
-          <div id="currentTripSub" class="eyebrow">Gezilerim</div></div>
-        <div class="trip-header-right"><select id="tripSelect" aria-label="Gezi seç" title="Gezi değiştir"></select><div id="userChip" class="user-chip"></div></div>
+      <header class="mobile-header trip-header-clean">
+        <div class="brand-line"><span>TripSplit</span><span class="brand-emoji">✈️</span></div>
+        <div class="trip-header-right">
+          <label class="trip-header-picker"><span class="trip-header-label">Aktif gezi</span>
+            <select id="tripSelect" aria-label="Aktif geziyi seç"></select>
+            <span id="tripDateRange" class="trip-header-date"></span>
+          </label>
+          <button id="newTripBtn" class="secondary trip-header-create" type="button">＋ Yeni gezi</button>
+          <div id="userChip" class="user-chip"></div>
+        </div>
       </header>
-      <div class="trip-compact-info"><div class="trip-compact-title"><strong id="currentTripName">Gezi yükleniyor…</strong><span id="tripDateRange" class="muted small"></span></div><button id="newTripBtn" class="mini-link" type="button">＋ Yeni gezi</button></div>
+      <span id="currentTripName" class="hidden" aria-hidden="true"></span>
+      <span id="currentTripSub" class="hidden" aria-hidden="true"></span>
       <div id="inviteAcceptance" class="panel invite-acceptance hidden"><div><strong id="inviteAcceptanceTitle">Gezi daveti</strong><p id="inviteAcceptanceText" class="muted small">Davet bağlantısını kabul et.</p></div><button id="acceptInviteBtn" type="button" class="primary">Geziye Katıl</button><button id="dismissInviteBtn" type="button" class="icon-button" aria-label="Gizle">×</button></div>
       <div id="tripNoMembership" class="panel trip-empty hidden">
         <h2>İlk gezini oluştur</h2>
@@ -279,42 +286,38 @@
         <div class="panel account-panel">
           <dl class="account-grid">
             <div><dt>Kullanıcı</dt><dd id="accountUsername">-</dd></div>
-            <div><dt>Yetki</dt><dd id="accountRole">-</dd></div>
+            <div><dt>Geziler</dt><dd id="accountTripCount">-</dd></div>
           </dl>
           <button id="accountLogoutBtn" class="secondary full-button" type="button">Çıkış Yap</button>
         </div>
 
-        <div id="adminAccountPanel" class="panel hidden">
-          <div class="section-title"><div><h3>Admin İşlemleri</h3><p>Kullanıcı oluşturabilir, şifre değiştirebilir ve kullanıcıları pasif/aktif yapabilirsin.</p></div></div>
-
-          <div class="user-admin-block">
-            <h4>Yeni Kullanıcı</h4>
-            <form id="createUserForm" class="stack">
-              <label><span>Kullanıcı Adı</span><input id="adminCreateUsername" type="text" maxlength="50" placeholder="Örn. Ahmet" required /></label>
-              <label><span>Geçici Şifre</span><input id="adminCreatePassword" type="password" minlength="8" autocomplete="new-password" required /></label>
-              <button id="adminCreateUserBtn" class="primary" type="submit">Kullanıcı Oluştur</button>
-            </form>
-            <div id="createUserMessage" class="message hidden"></div>
-            <div class="admin-user-list-head"><h4>Kullanıcılar</h4><span class="muted small">Silme yok; pasife alma var.</span></div>
-            <div id="adminUserList" class="admin-user-list"></div>
-            <div id="userStatusMessage" class="message hidden"></div>
-          </div>
-
-          <div class="password-admin-block">
-            <h4>Şifre Değiştir</h4>
-          <form id="passwordAdminForm" class="stack">
-            <label><span>Kullanıcı</span><select id="adminPasswordUser"></select></label>
-            <label><span>Yeni Şifre</span><input id="adminNewPassword" type="password" minlength="8" autocomplete="new-password" required /></label>
-            <label><span>Yeni Şifre Tekrar</span><input id="adminNewPasswordConfirm" type="password" minlength="8" autocomplete="new-password" required /></label>
-            <button id="adminPasswordBtn" class="primary" type="submit">Şifreyi Değiştir</button>
+        <div class="panel">
+          <div class="section-title"><div><h3>Şifremi Değiştir</h3>
+            <p>Şifreni yalnızca sen değiştirebilirsin. E-posta ile kurtarma henüz yok.</p></div></div>
+          <form id="selfPasswordForm" class="stack">
+            <label><span>Yeni şifre</span><input id="selfNewPassword" type="password" minlength="10" autocomplete="new-password" required /></label>
+            <label><span>Yeni şifre (tekrar)</span><input id="selfNewPasswordRepeat" type="password" minlength="10" autocomplete="new-password" required /></label>
+            <button id="selfPasswordSave" class="secondary" type="submit">Şifremi Güncelle</button>
           </form>
-          <div id="passwordMessage" class="message hidden"></div>
+          <div id="selfPasswordMessage" class="message hidden"></div>
+        </div>
+        <div class="panel">
+          <div class="section-title"><div><h3>Favori Para Birimlerim</h3>
+            <p>Yalnızca senin hesabında görünür. Gezinin para birimlerini kendiliğinden değiştirmez.</p></div></div>
+          <div class="favorite-currency-add">
+            <select id="favoriteCurrencySelect" aria-label="Favorilere eklenecek para birimi"></select>
+            <button id="addFavoriteCurrencyBtn" class="secondary" type="button">Favorilere ekle</button>
           </div>
+          <div id="favoriteCurrencyList" class="favorite-currency-list"></div>
+          <div id="favoriteCurrencyMessage" class="message hidden"></div>
+        </div>
+        <div class="panel">
+          <div class="section-title"><div><h3>Gezi Verilerim</h3>
+            <p>Seçili gezinin kayıtlarını ve revizyon geçmişini dışa aktar.</p></div></div>
           <div class="admin-tools">
             <button id="backupJsonBtn" class="secondary" type="button">Gezi Yedeği (JSON)</button>
             <button id="exportCsvBtn" class="secondary" type="button">CSV İndir</button>
           </div>
-          <p class="backup-note">Tam yedek; harcama ve borç ödeme revizyonları ile iptal edilmiş kayıtları da içerir.</p>
         </div>
         <div id="tripMembersPanel" class="panel hidden">
           <div class="section-title"><div><h3>Gezi Üyeleri</h3><p id="accountTripName">—</p></div><span id="accountTripRole" class="count-pill">—</span></div>
@@ -342,7 +345,7 @@
             </div>
             <form id="tripCurrencySettingsForm" class="stack currency-settings-form">
               <label><span>Ana hesaplama para birimi</span><select id="tripBaseCurrencySettings"></select></label>
-              <fieldset class="participant-fieldset"><legend>Kullanılacak para birimleri</legend><div id="tripAllowedCurrencyChoices" class="currency-choices"></div></fieldset>
+              <fieldset class="participant-fieldset"><legend>Kullanılacak para birimleri</legend><div id="tripAllowedCurrencyChoices" class="currency-picker"></div></fieldset>
               <button class="secondary" type="submit">Para Birimi Ayarlarını Kaydet</button>
               <div id="tripCurrencyMessage" class="message hidden"></div>
             </form>
@@ -373,8 +376,8 @@
         <div class="two-col"><label><span>Başlangıç <small>(opsiyonel)</small></span><input id="newTripStart" type="date" /></label><label><span>Bitiş <small>(opsiyonel)</small></span><input id="newTripEnd" type="date" /></label></div>
         <div class="trip-setup-section"><strong>2. Para birimleri</strong>
           <label><span>Ana hesaplama para birimi</span><select id="newTripBaseCurrency"></select></label>
-          <fieldset class="participant-fieldset"><legend>Kullanılacak para birimleri</legend><div id="newTripCurrencyChoices" class="currency-choices"></div></fieldset>
-          <p class="muted small">Kesin borçlar kendi para biriminde kalır; yaklaşık toplam ana para biriminde görünür.</p>
+          <fieldset class="participant-fieldset"><legend>Kullanılacak para birimleri</legend><div id="newTripCurrencyChoices" class="currency-picker"></div></fieldset>
+          <p class="muted small">Önce önerilenlerden seç; başka birimi arayarak ekleyebilirsin. Kesin borçlar kendi para biriminde kalır.</p>
         </div>
         <button id="saveNewTripBtn" class="primary" type="submit">Gezi Oluştur</button>
         <div id="tripCreateMessage" class="message hidden"></div>
@@ -425,7 +428,7 @@
   <div id="toast" class="toast hidden"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="config.js?v=4.1"></script>
-  <script src="app.js?v=4.1"></script>
+  <script src="config.js?v=4.2"></script>
+  <script src="app.js?v=4.2"></script>
 </body>
 </html>

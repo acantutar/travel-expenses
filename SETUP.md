@@ -1,4 +1,4 @@
-# TripSplit v4.1 — Kurulum ve işletim
+# TripSplit v4.2 — Kurulum ve işletim
 
 Bu belge sistemin mevcut mimarisini açıklar. **Canlı Supabase projesinde SQL migrations zaten uygulanmıştır.**
 Canlı veritabanına `schema.sql` veya migration dosyalarını gelişigüzel tekrar çalıştırmayın.
@@ -43,3 +43,9 @@ Gezi verileri RLS ile yalnız üyelere görünür; admin veya gezi sahibi bu kur
 ## Yayın
 Değişiklikler test edilen GitHub pull request üzerinden `main` dalına alınır.
 GitHub Actions statik testleri (JS syntax, HTML ID'leri, sürüm etiketleri) ve Pages deploy sonucunu kontrol edin.
+
+## v4.2 notları
+- Genel uygulama admin rolü kaldırıldı; gezi sahibi/yöneticisi yetkileri gezi kapsamında kalır.
+- Para birimi kataloğu yaklaşık 159 kod içerir; kişisel favoriler `user_currency_favorites` tablosunda RLS ile saklanır.
+- Mevcut kullanıcılar oturumları açıkken kendi şifrelerini değiştirebilir. E-posta kurtarma henüz yok.
+- İlgili dosya: `migrations/v4_2_permissions_currencies.sql` (canlıda uygulanmış).
