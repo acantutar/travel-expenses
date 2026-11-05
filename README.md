@@ -1,6 +1,6 @@
 # TripSplit
 
-**v4.2:** Eşit platform hesapları, geziye özel yönetim, aranabilir para birimi kataloğu ve kişisel favoriler.
+**v4.3:** İlk ekranda 10 pratik seyahat para birimi; diğerleri yalnız ihtiyaç halinde arama ile eklenir. Gezi oluşturma, üye daveti ve kişisel hesap ekranları sadeleştirildi.
 
 TripSplit, arkadaş grupları için gezilere özel ortak harcama, borç ve ödeme takibi uygulamasıdır.
 
@@ -8,7 +8,9 @@ TripSplit, arkadaş grupları için gezilere özel ortak harcama, borç ve ödem
 
 - Her kullanıcının kendi gezisini oluşturabilmesi; ayrıcalıklı platform admini yok
 - Bir kullanıcı hesabıyla birden fazla gezi oluşturma ve yönetme
-- Yaklaşık 159 para birimi içinde kod/isim arama; kişiye özel favoriler
+- İlk ekranda 10 önerilen para birimi (TRY, EUR, USD, GBP, AED, SAR, GEL, THB, MYR, JPY)
+- Diğer 149 birimi yalnızca "Diğer para birimlerini ekle" üzerinden arayarak seçme
+- Kişisel favorileri kod veya isimle arayarak ekleme (yalnız ilgili kullanıcıya ait)
 - Gezide kullanılacak para birimlerini ve ana raporlama para birimini seçme
 - Kesin borçları kendi para biriminde tutma, yaklaşık özetleri gezi ana para biriminde hesaplama
 - Yönetici tarafından yaklaşık döviz kurlarını belirleme
@@ -51,3 +53,9 @@ Kurulum ve geçiş sırasını `SETUP.md` açıklar. GitHub'daki eski `schema.sq
 ## V4.2 geliştirme brief'i
 
 Bkz. [docs/tripsplit-v4.2-brief.md](docs/tripsplit-v4.2-brief.md). Şema değişiklikleri [migrations/v4_2_permissions_currencies.sql](migrations/v4_2_permissions_currencies.sql) içinde sürümlenmiştir.
+
+## v4.3 tasarım / test
+
+Gezi oluştururken önerilen 10 birim iki kısa satırda görünür. Seçilmeyen birimleri aramak için ek panel açılır; eklenenler kolayca kaldırılabilir. Hesabım sayfasında önce seçili geziye ait üyeler ve kurlar, ardından kişisel hesap ayarları bulunur.
+
+`tests/ui-layout-smoke.mjs` Chrome üzerinden masaüstü, tablet ve mobil 375/768/1440 px yerleşim duman testlerini yapar. Bu test gerçek bir kullanıcının oturum açmasını veya davet kabulünü test etmez.

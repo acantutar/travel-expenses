@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <title>TripSplit</title>
-  <link rel="stylesheet" href="styles.css?v=4.2" />
+  <link rel="stylesheet" href="styles.css?v=4.3" />
 </head>
 <body>
   <div id="offlineBanner" class="offline-banner hidden">İnternet yok — yeni kayıt veya değişiklik kaydedilemez.</div>
@@ -291,34 +291,6 @@
           <button id="accountLogoutBtn" class="secondary full-button" type="button">Çıkış Yap</button>
         </div>
 
-        <div class="panel">
-          <div class="section-title"><div><h3>Şifremi Değiştir</h3>
-            <p>Şifreni yalnızca sen değiştirebilirsin. E-posta ile kurtarma henüz yok.</p></div></div>
-          <form id="selfPasswordForm" class="stack">
-            <label><span>Yeni şifre</span><input id="selfNewPassword" type="password" minlength="10" autocomplete="new-password" required /></label>
-            <label><span>Yeni şifre (tekrar)</span><input id="selfNewPasswordRepeat" type="password" minlength="10" autocomplete="new-password" required /></label>
-            <button id="selfPasswordSave" class="secondary" type="submit">Şifremi Güncelle</button>
-          </form>
-          <div id="selfPasswordMessage" class="message hidden"></div>
-        </div>
-        <div class="panel">
-          <div class="section-title"><div><h3>Favori Para Birimlerim</h3>
-            <p>Yalnızca senin hesabında görünür. Gezinin para birimlerini kendiliğinden değiştirmez.</p></div></div>
-          <div class="favorite-currency-add">
-            <select id="favoriteCurrencySelect" aria-label="Favorilere eklenecek para birimi"></select>
-            <button id="addFavoriteCurrencyBtn" class="secondary" type="button">Favorilere ekle</button>
-          </div>
-          <div id="favoriteCurrencyList" class="favorite-currency-list"></div>
-          <div id="favoriteCurrencyMessage" class="message hidden"></div>
-        </div>
-        <div class="panel">
-          <div class="section-title"><div><h3>Gezi Verilerim</h3>
-            <p>Seçili gezinin kayıtlarını ve revizyon geçmişini dışa aktar.</p></div></div>
-          <div class="admin-tools">
-            <button id="backupJsonBtn" class="secondary" type="button">Gezi Yedeği (JSON)</button>
-            <button id="exportCsvBtn" class="secondary" type="button">CSV İndir</button>
-          </div>
-        </div>
         <div id="tripMembersPanel" class="panel hidden">
           <div class="section-title"><div><h3>Gezi Üyeleri</h3><p id="accountTripName">—</p></div><span id="accountTripRole" class="count-pill">—</span></div>
           <div id="tripMembersList" class="trip-member-list"></div>
@@ -330,7 +302,7 @@
             </form>
             <p class="backup-note">Mevcut kullanıcıları adlarıyla ekleyebilir, yeni arkadaşlarını bağlantıyla davet edebilirsin.</p>
             <div id="tripMemberMessage" class="message hidden"></div>
-            <div class="invite-tools"><h4>Arkadaş Davet Et</h4><p class="muted small">7 gün geçerli, tek kullanımlık bağlantı. WhatsApp üzerinden paylaşabilirsin.</p>
+            <div class="invite-tools"><div class="section-title"><div><h4>Yeni arkadaşını davet et</h4><p class="muted small">7 gün geçerli, tek kullanımlık bağlantı. WhatsApp üzerinden paylaşabilirsin.</p></div></div>
               <button id="createInviteBtn" class="primary" type="button">Davet Bağlantısı Oluştur</button>
               <div id="inviteShareBox" class="hidden invite-share"><label><span>Davet bağlantısı</span><input id="generatedInviteLink" readonly /></label><button id="copyInviteLinkBtn" class="secondary" type="button">Bağlantıyı Kopyala</button></div>
               <div id="inviteManageMessage" class="message hidden"></div><div id="tripInviteList" class="trip-invite-list"></div>
@@ -356,6 +328,38 @@
             <div id="displayRatesMessage" class="message hidden"></div>
             <p id="displayRatesUpdated" class="backup-note">Henüz yaklaşık kur girilmedi.</p>
           </div>
+        <div class="panel">
+          <div class="section-title"><div><h3>Şifremi Değiştir</h3>
+            <p>Şifreni yalnızca sen değiştirebilirsin. E-posta ile kurtarma henüz yok.</p></div></div>
+          <form id="selfPasswordForm" class="stack">
+            <label><span>Yeni şifre</span><input id="selfNewPassword" type="password" minlength="10" autocomplete="new-password" required /></label>
+            <label><span>Yeni şifre (tekrar)</span><input id="selfNewPasswordRepeat" type="password" minlength="10" autocomplete="new-password" required /></label>
+            <button id="selfPasswordSave" class="secondary" type="submit">Şifremi Güncelle</button>
+          </form>
+          <div id="selfPasswordMessage" class="message hidden"></div>
+        </div>
+        <div class="panel">
+          <div class="section-title"><div><h3>Favori Para Birimlerim</h3>
+            <p>Yalnızca senin hesabında görünür. Gezinin para birimlerini kendiliğinden değiştirmez.</p></div></div>
+          <div class="favorite-currency-add">
+            <label class="favorite-currency-input"><span>Para birimi ara</span>
+              <input id="favoriteCurrencySearch" type="search" autocomplete="off"
+                aria-label="Favorilerime eklemek için para birimi ara" placeholder="Örn. RSD, Dinar, Gürcistan..." />
+            </label>
+            <button id="addFavoriteCurrencyBtn" class="secondary" type="button" disabled>Favorilere ekle</button>
+          </div>
+          <div id="favoriteCurrencyResults" class="favorite-currency-results hidden" aria-label="Para birimi arama sonuçları"></div>
+          <div id="favoriteCurrencyList" class="favorite-currency-list"></div>
+          <div id="favoriteCurrencyMessage" class="message hidden"></div>
+        </div>
+        <div class="panel">
+          <div class="section-title"><div><h3>Gezi Verilerim</h3>
+            <p>Seçili gezinin kayıtlarını ve revizyon geçmişini dışa aktar.</p></div></div>
+          <div class="admin-tools">
+            <button id="backupJsonBtn" class="secondary" type="button">Gezi Yedeği (JSON)</button>
+            <button id="exportCsvBtn" class="secondary" type="button">CSV İndir</button>
+          </div>
+        </div>
       </section>
 
       <nav class="bottom-nav" aria-label="Ana menü">
@@ -369,15 +373,16 @@
 
   <div id="tripCreateModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-label="Yeni gezi oluştur">
     <div class="modal">
-      <div class="modal-head"><div><div class="eyebrow">TripSplit v4</div><h2>Yeni Gezi</h2><p class="muted small">Gezinin sahibi sen olursun. Katılımcıları daha sonra ekleyebilirsin.</p></div><button id="closeTripCreateModal" class="icon-button" type="button" aria-label="Kapat">×</button></div>
+      <div class="modal-head"><div><div class="eyebrow">Gezi oluştur</div><h2>Yeni Gezi</h2><p class="muted small">Gezinin sahibi sen olursun. Katılımcıları daha sonra ekleyebilirsin.</p></div><button id="closeTripCreateModal" class="icon-button" type="button" aria-label="Kapat">×</button></div>
       <form id="newTripForm" class="stack">
+        <div class="trip-form-stage"><span class="trip-stage-index">1</span><strong>Gezi bilgileri</strong></div>
         <label><span>Gezi Adı</span><input id="newTripName" maxlength="100" placeholder="Örn. Tayland 2027" required /></label>
         <label><span>Hedef <small>(opsiyonel)</small></span><input id="newTripDestination" maxlength="120" placeholder="Örn. Bangkok, Krabi" /></label>
         <div class="two-col"><label><span>Başlangıç <small>(opsiyonel)</small></span><input id="newTripStart" type="date" /></label><label><span>Bitiş <small>(opsiyonel)</small></span><input id="newTripEnd" type="date" /></label></div>
-        <div class="trip-setup-section"><strong>2. Para birimleri</strong>
+        <div class="trip-setup-section"><div class="trip-form-stage"><span class="trip-stage-index">2</span><strong>Para birimleri</strong></div>
           <label><span>Ana hesaplama para birimi</span><select id="newTripBaseCurrency"></select></label>
           <fieldset class="participant-fieldset"><legend>Kullanılacak para birimleri</legend><div id="newTripCurrencyChoices" class="currency-picker"></div></fieldset>
-          <p class="muted small">Önce önerilenlerden seç; başka birimi arayarak ekleyebilirsin. Kesin borçlar kendi para biriminde kalır.</p>
+          <p class="muted small">Sadece kullanacağın para birimlerini seç. Eklediğin diğer birimler yalnızca bu gezi için geçerli olur.</p>
         </div>
         <button id="saveNewTripBtn" class="primary" type="submit">Gezi Oluştur</button>
         <div id="tripCreateMessage" class="message hidden"></div>
@@ -428,7 +433,7 @@
   <div id="toast" class="toast hidden"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="config.js?v=4.2"></script>
-  <script src="app.js?v=4.2"></script>
+  <script src="config.js?v=4.3"></script>
+  <script src="app.js?v=4.3"></script>
 </body>
 </html>

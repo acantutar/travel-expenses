@@ -25,8 +25,8 @@ jobs:
           refs = set(re.findall(r'\$\("([\w-]+)"\)', js))
           ids = set(re.findall(r'id="([\w-]+)"', html))
           assert not (refs - ids), f"Missing HTML elements: {refs - ids}"
-          assert "app.js?v=4.2" in html
-          assert "styles.css?v=4.2" in html
+          assert "app.js?v=4.3" in html
+          assert "styles.css?v=4.3" in html
           for key in ("create_trip", "create_trip_expense", "create_trip_settlement",
                       "trip_members", "trip_display_rates", "tripSelect", "set_trip_member_active",
                       "join-register", "create_trip_invite", "preview_trip_invite",
@@ -42,10 +42,34 @@ jobs:
           assert "joinRegisterForm" in html
           assert "Admin İşlemleri" not in html
           assert "accountTripCount" in html
-          assert "favoriteCurrencySelect" in html
+          assert "favoriteCurrencySearch" in html
+          assert "favoriteCurrencyResults" in html
           assert "selfPasswordForm" in html
           assert "trip-header-clean" in html
+          assert "currency-more-toggle" in js
+          assert "currency-extra-panel" in js
+          assert "favoriteCurrencySelect" not in (html + js)
+          import json
+          match = re.search(r"const RECOMMENDED_CURRENCIES = (\[[^\]]+\])", js)
+          assert match, "Missing recommended currencies"
+          items = json.loads(match.group(1))
+          assert len(items) == 10 and len(set(items)) == 10, items
+          assert html.index("tripMembersPanel") < html.index("selfPasswordForm")
+          assert html.count('id="newTripCurrencyChoices"') == 1
           sql=Path("migrations/v4_multitrip.sql").read_text()
           assert "enable row level security" in sql
-          print("TripSplit v4.2 static checks passed")
+          print("TripSplit v4.3 static checks passed")
           PY
+      - name: Install browser layout test dependency
+        run: npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright-core@1.55.1
+      - name: Responsive UI layout (375 / 768 / 1440)
+        env:
+          UI_SCREENSHOTS: "1"
+        run: node tests/ui-layout-smoke.mjs
+      - name: Upload UI screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tripsplit-ui-smoke
+          path: ui-screenshots/
+          if-no-files-found: ignore
