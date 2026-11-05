@@ -25,7 +25,7 @@ jobs:
           refs = set(re.findall(r'\$\("([\w-]+)"\)', js))
           ids = set(re.findall(r'id="([\w-]+)"', html))
           assert not (refs - ids), f"Missing HTML elements: {refs - ids}"
-          assert "app.js?v=4.3" in html
+          assert "app.js?v=4.3.1" in html
           assert "styles.css?v=4.3" in html
           for key in ("create_trip", "create_trip_expense", "create_trip_settlement",
                       "trip_members", "trip_display_rates", "tripSelect", "set_trip_member_active",
@@ -62,6 +62,8 @@ jobs:
           PY
       - name: Install browser layout test dependency
         run: npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright-core@1.55.1
+      - name: Verify app actually reaches login screen
+        run: node tests/startup-smoke.mjs
       - name: Responsive UI layout (375 / 768 / 1440)
         env:
           UI_SCREENSHOTS: "1"
