@@ -122,7 +122,7 @@ try {
     return {
       modalVisible:!document.getElementById("tripCreateModal").classList.contains("hidden"),
       advancedClosed:!advanced.open,
-      destinationHidden:document.getElementById("newTripDestination").getClientRects().length===0,
+      destinationHidden:document.getElementById("newTripDestination").closest("details")?.open === false,
       base:document.getElementById("newTripBaseCurrency").value,
       selected:currencies,
       focused:document.activeElement?.id
