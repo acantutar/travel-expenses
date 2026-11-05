@@ -2,8 +2,8 @@ import fs from "node:fs/promises";
 import { chromium } from "playwright-core";
 
 const html=(await fs.readFile("index.html","utf8"))
-  .replace(/<script[^>]*>[\\s\\S]*?<\\/script>/gi,"")
-  .replace(/<link[^>]*rel="stylesheet"[^>]*>/gi,"");
+  .replace(new RegExp("<script[^>]*>.*?</script>","gis"),"")
+  .replace(new RegExp("<link[^>]*rel=.stylesheet.[^>]*>","gi"),"");
 const js=await fs.readFile("app.js","utf8");
 const browser=await chromium.launch({channel:"chrome",headless:true,args:["--no-sandbox"]});
 try {
