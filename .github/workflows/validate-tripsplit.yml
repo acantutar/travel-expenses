@@ -27,8 +27,8 @@ jobs:
           refs = set(re.findall(r'\$\("([\w-]+)"\)', js))
           ids = set(re.findall(r'id="([\w-]+)"', html))
           assert not (refs - ids), f"Missing HTML elements: {refs - ids}"
-          assert "app.js?v=4.3.1" in html
-          assert "styles.css?v=4.3" in html
+          assert "app.js?v=4.3.2" in html
+          assert "styles.css?v=4.3.2" in html
           for key in ("create_trip", "create_trip_expense", "create_trip_settlement",
                       "trip_members", "trip_display_rates", "tripSelect", "set_trip_member_active",
                       "join-register", "create_trip_invite", "preview_trip_invite",
@@ -40,6 +40,8 @@ jobs:
           assert len(ids) == len(re.findall(r'id="([\w-]+)"', html)), "Duplicate HTML ids"
           assert "SERVICE_ROLE_KEY" not in js, "Server credentials must not be in frontend"
           assert "newTripCurrencyChoices" in html
+          assert 'id="newTripAdvanced"' in html
+          assert 'id="newTripName"' in html
           assert "inviteAcceptance" in html
           assert "joinRegisterForm" in html
           assert "Admin İşlemleri" not in html
