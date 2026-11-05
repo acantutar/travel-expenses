@@ -68,7 +68,6 @@ jobs:
     env:
       PG_URI: ${{ secrets.TRIPSPLIT_BACKUP_DB_URL }}
       AGE_RECIPIENT: ${{ vars.TRIPSPLIT_BACKUP_AGE_RECIPIENT }}
-      BACKUP_OUTPUT_DIR: ${{ runner.temp }}/tripsplit-encrypted-backups
     steps:
       - uses: actions/checkout@v4
       - name: Require configured secret and offline-owned age public key
@@ -80,6 +79,8 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y age
       - name: Create a verified, encrypted archive
+        env:
+          BACKUP_OUTPUT_DIR: ${{ runner.temp }}/tripsplit-encrypted-backups
         run: bash scripts/backup/create-encrypted-backup.sh
       - name: Upload ONLY ciphertext outside Supabase (35-day retention)
         uses: actions/upload-artifact@v4
