@@ -1,0 +1,50 @@
+name: Isolated RLS integration tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  postgres-rls:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: test-only-password
+          POSTGRES_DB: tripsplit_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d tripsplit_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGDATABASE: tripsplit_ci
+      PGUSER: postgres
+      PGPASSWORD: test-only-password
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bootstrap disposable database with synthetic identities
+        run: psql -X -v ON_ERROR_STOP=1 -f tests/rls/00-bootstrap.sql
+      - name: Apply committed v3 schema
+        run: psql -X -v ON_ERROR_STOP=1 -f schema.sql
+      - name: Recreate missing historical adapter in isolated database
+        run: psql -X -v ON_ERROR_STOP=1 -f tests/rls/10-v3-compat.sql
+      - name: Apply committed multi-trip and currency migrations
+        run: |
+          psql -X -v ON_ERROR_STOP=1 -f migrations/v4_multitrip.sql
+          psql -X -v ON_ERROR_STOP=1 -f migrations/v4_1_invites_currencies.sql
+          psql -X -v ON_ERROR_STOP=1 -f migrations/v4_2_permissions_currencies.sql
+      - name: Verify production-like restrictive policy set
+        run: psql -X -v ON_ERROR_STOP=1 -f tests/rls/20-policy-gate.sql
+      - name: Test cross-trip reads and unauthorized RPC writes as two users
+        run: psql -X -v ON_ERROR_STOP=1 -f tests/rls/30-cross-user.sql
