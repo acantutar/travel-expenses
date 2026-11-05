@@ -1,0 +1,91 @@
+name: TripSplit encrypted offsite database backup
+
+on:
+  pull_request:
+    paths:
+      - "scripts/backup/**"
+      - "tests/backup/**"
+      - ".github/workflows/tripsplit-backup.yml"
+  schedule:
+    - cron: "17 02 * * *"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Smoke test only, or encrypted production backup (main branch only)"
+        type: choice
+        required: true
+        default: smoke
+        options:
+          - smoke
+          - backup
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tripsplit-backup-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: false
+
+jobs:
+  backup-smoke:
+    if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'smoke')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: smoke-only-password
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      PGPASSWORD: smoke-only-password
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install age for encrypted archive test
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y age
+      - name: Verify source -> encryption -> decryption -> isolated restoration
+        run: bash tests/backup/encrypted-restore-smoke.sh
+
+  backup-production:
+    # Never read production credentials in a pull request.
+    # Scheduled backups stay inactive until the owner sets the enabling variable.
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      ((github.event_name == 'schedule' && vars.TRIPSPLIT_BACKUP_ENABLED == 'true') ||
+       (github.event_name == 'workflow_dispatch' && inputs.mode == 'backup'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PG_URI: ${{ secrets.TRIPSPLIT_BACKUP_DB_URL }}
+      AGE_RECIPIENT: ${{ vars.TRIPSPLIT_BACKUP_AGE_RECIPIENT }}
+      BACKUP_OUTPUT_DIR: ${{ runner.temp }}/tripsplit-encrypted-backups
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require configured secret and offline-owned age public key
+        run: |
+          test -n "$PG_URI" || { echo "Missing TRIPSPLIT_BACKUP_DB_URL secret"; exit 1; }
+          test -n "$AGE_RECIPIENT" || { echo "Missing TRIPSPLIT_BACKUP_AGE_RECIPIENT variable"; exit 1; }
+      - name: Install age
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y age
+      - name: Create a verified, encrypted archive
+        run: bash scripts/backup/create-encrypted-backup.sh
+      - name: Upload ONLY ciphertext outside Supabase (35-day retention)
+        uses: actions/upload-artifact@v4
+        with:
+          name: tripsplit-db-encrypted-${{ github.run_id }}
+          path: ${{ runner.temp }}/tripsplit-encrypted-backups/*.tar.age
+          if-no-files-found: error
+          retention-days: 35
+          compression-level: 0
