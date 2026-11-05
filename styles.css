@@ -671,3 +671,12 @@ button.my-entry-card:active{transform:scale(.995)}
   #tripCreateModal .currency-more-toggle,
   #tripCreateModal #saveNewTripBtn{min-width:0;max-width:100%;box-sizing:border-box}
 }
+
+/* v4.3.2 — one-field trip creation, optional settings stay out of the way */
+#tripCreateModal .trip-quick-hint{margin:-2px 0 0;line-height:1.45}
+#tripCreateModal .trip-advanced{border:1px solid var(--line);border-radius:14px;overflow:visible}
+#tripCreateModal .trip-advanced summary{padding:12px 14px;cursor:pointer;font-size:.86rem;font-weight:650;list-style-position:inside}
+#tripCreateModal .trip-advanced summary:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+#tripCreateModal .trip-advanced summary small{color:var(--muted);font-weight:400}
+#tripCreateModal .trip-advanced-content{padding:4px 14px 14px;gap:12px}
+#tripCreateModal .trip-advanced:not([open]) .trip-advanced-content{display:none}
