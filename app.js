@@ -272,7 +272,7 @@
     if(readCurrencyChoices(containerId,chosen).includes(chosen))$(id).value=chosen;
   }
   function setupNewTripCurrencyForm() {
-    fillCurrencyChoices("newTripCurrencyChoices",["TL","EUR","USD"]);
+    fillCurrencyChoices("newTripCurrencyChoices",["TL"]);
     fillCurrencySelect("newTripBaseCurrency","TL");
   }
   function renderCurrencySettings() {
@@ -828,6 +828,13 @@
     reportDetailsExpanded = false;
   }
 
+  function openNewTripModal() {
+    clearMessage($("tripCreateMessage"));
+    $("newTripAdvanced").open = false;
+    $("tripCreateModal").classList.remove("hidden");
+    $("newTripName").focus();
+  }
+
   async function createTrip(e) {
     e.preventDefault();
     clearMessage($("tripCreateMessage"));
@@ -856,6 +863,7 @@
       await loadBaseData();
       $("tripCreateModal").classList.add("hidden");
       $("newTripForm").reset();
+      $("newTripAdvanced").open = false;
       $("inviteShareBox").classList.add("hidden");
       $("generatedInviteLink").value="";
       setupNewTripCurrencyForm();
@@ -1935,8 +1943,8 @@
     $("createInviteBtn").addEventListener("click", createInvite);
     $("copyInviteLinkBtn").addEventListener("click", copyInvite);
     $("tripSelect").addEventListener("change", switchTrip);
-    $("newTripBtn").addEventListener("click", () => { clearMessage($("tripCreateMessage")); $("tripCreateModal").classList.remove("hidden"); });
-    $("tripEmptyCreateBtn").addEventListener("click", () => { clearMessage($("tripCreateMessage")); $("tripCreateModal").classList.remove("hidden"); });
+    $("newTripBtn").addEventListener("click", () => { openNewTripModal(); });
+    $("tripEmptyCreateBtn").addEventListener("click", () => { openNewTripModal(); });
     $("closeTripCreateModal").addEventListener("click", () => $("tripCreateModal").classList.add("hidden"));
     $("tripCreateModal").addEventListener("click", (e) => { if (e.target === $("tripCreateModal")) $("tripCreateModal").classList.add("hidden"); });
     $("newTripForm").addEventListener("submit", createTrip);
