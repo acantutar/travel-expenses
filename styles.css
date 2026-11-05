@@ -655,3 +655,19 @@ button.my-entry-card:active{transform:scale(.995)}
   .currency-result{padding:10px 9px}
 }
 @media(max-width:355px){.currency-picker-options{grid-template-columns:repeat(4,minmax(0,1fr))}}
+
+
+/* Narrow phones: browser date inputs otherwise impose min-content grid width. */
+@media(max-width:360px){
+  #tripCreateModal .modal{width:100%;min-width:0;padding:13px}
+  #tripCreateModal #newTripForm,
+  #tripCreateModal #newTripForm>.two-col,
+  #tripCreateModal .trip-setup-section,
+  #tripCreateModal .participant-fieldset,
+  #tripCreateModal label{min-width:0;max-width:100%}
+  #tripCreateModal #newTripForm>.two-col{grid-template-columns:minmax(0,1fr)}
+  #tripCreateModal input,
+  #tripCreateModal select,
+  #tripCreateModal .currency-more-toggle,
+  #tripCreateModal #saveNewTripBtn{min-width:0;max-width:100%;box-sizing:border-box}
+}
