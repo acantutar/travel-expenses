@@ -10,7 +10,7 @@ const html=raw.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,"")
   .replace(/<link\b[^>]*rel="stylesheet"[^>]*>/gi,"");
 const browser=await chromium.launch({channel:"chrome",headless:true,args:["--no-sandbox"]});
 let errors=0;
-for(const width of [375,768,1440]){
+for(const width of [320,375,768,1440]){
   for(const mode of ["account","newtrip"]){
     const page=await browser.newPage({viewport:{width,height:900},deviceScaleFactor:1});
     await page.setContent(html,{waitUntil:"domcontentloaded"});
@@ -42,8 +42,10 @@ for(const width of [375,768,1440]){
         document.getElementById("tripCreateModal").classList.remove("hidden");
         document.getElementById("newTripName").value="Gürcistan Gezisi";
       }
-      const rect=(id)=>document.getElementById(id).getBoundingClientRect();
-      const headerIds=["tripSelect","newTripBtn","userChip"];
+      const rect=(id)=> (id==="brand"
+        ? document.querySelector("#appScreen .brand-line")
+        : document.getElementById(id)).getBoundingClientRect();
+      const headerIds=["brand","tripSelect","newTripBtn","userChip"];
       const header=headerIds.map(rect);
       const intersects=(a,b)=>{
         const dx=Math.min(a.right,b.right)-Math.max(a.left,b.left);
