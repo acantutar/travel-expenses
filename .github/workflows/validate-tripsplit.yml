@@ -60,3 +60,16 @@ jobs:
           assert "enable row level security" in sql
           print("TripSplit v4.3 static checks passed")
           PY
+      - name: Install browser layout test dependency
+        run: npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright-core@1.55.1
+      - name: Responsive UI layout (375 / 768 / 1440)
+        env:
+          UI_SCREENSHOTS: "1"
+        run: node tests/ui-layout-smoke.mjs
+      - name: Upload UI screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tripsplit-ui-smoke
+          path: ui-screenshots/
+          if-no-files-found: ignore
