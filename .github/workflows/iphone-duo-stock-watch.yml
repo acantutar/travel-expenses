@@ -1,0 +1,29 @@
+name: iPhone Duo 512GB Night Sky Stock Watch
+
+on:
+  schedule:
+    - cron: '*/20 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: iphone-duo-trx-stock-watch
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Apple The Exchange TRX pickup availability
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check exact iPhone model and notify by GitHub issue on restock
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node .github/stock-watch/iphone-duo.mjs
