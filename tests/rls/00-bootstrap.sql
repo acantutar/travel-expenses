@@ -11,7 +11,8 @@ create function auth.uid() returns uuid language sql stable as $$
 $$;
 create table auth.users(
   id uuid primary key,
-  email text not null unique,
+  email text unique,
+  is_anonymous boolean not null default false,
   raw_user_meta_data jsonb not null default '{}'::jsonb
 );
 grant usage on schema public to anon,authenticated;

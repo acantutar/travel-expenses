@@ -680,3 +680,10 @@ button.my-entry-card:active{transform:scale(.995)}
 #tripCreateModal .trip-advanced summary small{color:var(--muted);font-weight:400}
 #tripCreateModal .trip-advanced-content{padding:4px 14px 14px;gap:12px}
 #tripCreateModal .trip-advanced:not([open]) .trip-advanced-content{display:none}
+
+/* v4.3.3 — anonymous guest: optional first-run CTA and honest recovery warning */
+.guest-start-box{display:grid;gap:8px;margin:18px 0 0}
+.guest-start-box p{margin:0;line-height:1.45;font-size:.78rem}
+.guest-session-notice{max-width:1200px;margin:0 auto;padding:9px 18px;background:#fff6dc;
+  border-bottom:1px solid #e8cd8d;color:#75550b;font-size:.79rem;line-height:1.45}
+@media(min-width:760px){.guest-session-notice{border:1px solid #e8cd8d;border-radius:12px}}

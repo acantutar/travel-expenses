@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <title>TripSplit</title>
-  <link rel="stylesheet" href="styles.css?v=4.3.2" />
+  <link rel="stylesheet" href="styles.css?v=4.3.3" />
 </head>
 <body>
   <div id="offlineBanner" class="offline-banner hidden">İnternet yok — yeni kayıt veya değişiklik kaydedilemez.</div>
@@ -26,6 +26,10 @@
         <div class="brand-icon">🌴</div>
         <h1>TripSplit</h1>
         <p class="muted">Gezilerini ve ortak harcamalarını tek yerden yönet.</p>
+        <div id="guestStartBox" class="guest-start-box hidden">
+          <button id="startGuestBtn" class="primary big-button full-button" type="button">Hesap açmadan gezi başlat</button>
+          <p class="muted small">Bu cihazdaki misafir oturumu silinirse geziye erişimini kaybedebilirsin. Hesap kurtarma henüz sunulmuyor.</p>
+        </div>
         <form id="authForm" class="stack login-form">
           <label>
             <span>Kullanıcı Adı</span>
@@ -52,6 +56,9 @@
     </section>
 
     <section id="appScreen" class="screen hidden">
+      <div id="guestSessionNotice" class="guest-session-notice hidden" role="status">
+        Misafir modundasın. Tarayıcı verilerin silinirse veya çıkış yaparsan gezine yeniden erişemeyebilirsin. Kalıcı hesap bağlama henüz hazır değil.
+      </div>
       <header class="mobile-header trip-header-clean">
         <div class="brand-line"><span>TripSplit</span><span class="brand-emoji">✈️</span></div>
         <div class="trip-header-right">
@@ -328,7 +335,7 @@
             <div id="displayRatesMessage" class="message hidden"></div>
             <p id="displayRatesUpdated" class="backup-note">Henüz yaklaşık kur girilmedi.</p>
           </div>
-        <div class="panel">
+        <div id="passwordPanel" class="panel">
           <div class="section-title"><div><h3>Şifremi Değiştir</h3>
             <p>Şifreni yalnızca sen değiştirebilirsin. E-posta ile kurtarma henüz yok.</p></div></div>
           <form id="selfPasswordForm" class="stack">
@@ -440,6 +447,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js?v=4.3"></script>
-  <script src="app.js?v=4.3.2"></script>
+  <script src="app.js?v=4.3.3"></script>
 </body>
 </html>

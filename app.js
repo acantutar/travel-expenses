@@ -503,6 +503,11 @@
     }
   }
 
+  function updateGuestStartAvailability() {
+    const allowed = cfg.ENABLE_GUEST_SIGNIN === true && !pendingInviteToken;
+    $("guestStartBox").classList.toggle("hidden", !allowed);
+  }
+
   function clearInvite() {
     pendingInviteToken = null;
     pendingInviteDetails = null;
@@ -511,6 +516,7 @@
     $("inviteAuthNotice").classList.add("hidden");
     $("showJoinRegisterBtn").classList.add("hidden");
     $("joinRegisterForm").classList.add("hidden");
+    updateGuestStartAvailability();
   }
 
   function renderInviteUI() {
@@ -523,6 +529,7 @@
     }
     $("inviteAcceptance").classList.toggle("hidden", !active || !currentUser);
     if (!active) $("inviteAuthNotice").classList.add("hidden");
+    updateGuestStartAvailability();
   }
 
   async function previewPendingInvite() {
@@ -659,6 +666,7 @@
     } catch (_) {}
 
     readInviteLink();
+    updateGuestStartAvailability();
     await previewPendingInvite().catch(() => undefined);
     const { data: { session } } = await client.auth.getSession();
     if (session?.user) await enterApp(session.user);
@@ -671,6 +679,36 @@
         setScreen("auth");
       }
     });
+  }
+
+  async function startGuest() {
+    if (cfg.ENABLE_GUEST_SIGNIN !== true || pendingInviteToken) return;
+    clearMessage($("authMessage"));
+    if (!navigator.onLine) {
+      showMessage($("authMessage"), "warning", "Misafir gezi için internet bağlantısı gerekli.");
+      return;
+    }
+    const btn = $("startGuestBtn");
+    btn.disabled = true;
+    btn.textContent = "Gezi hazırlanıyor…";
+    try {
+      const { data, error } = await client.auth.signInAnonymously();
+      if (error) throw error;
+      if (!data?.user?.is_anonymous) throw new Error("Misafir oturumu başlatılamadı.");
+      await enterApp(data.user);
+      if (!currentProfile || currentUser?.id !== data.user.id) {
+        throw new Error("Misafir profili bulunamadı. Güvenli kurulum tamamlanmamış.");
+      }
+      openNewTripModal();
+    } catch (err) {
+      showMessage($("authMessage"), "error",
+        /anonymous.*disabled|anonymous.*not.*enabled/i.test(String(err?.message || ""))
+          ? "Misafir giriş henüz etkinleştirilmedi. Lütfen mevcut hesabınla giriş yap."
+          : (err?.message || "Misafir girişi tamamlanamadı."));
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Hesap açmadan gezi başlat";
+    }
   }
 
   async function handleAuthSubmit(e) {
@@ -736,6 +774,9 @@
     }
 
     currentProfile = data;
+    const isGuest = user?.is_anonymous === true;
+    $("guestSessionNotice").classList.toggle("hidden", !isGuest);
+    $("passwordPanel").classList.toggle("hidden", isGuest);
     $("userChip").textContent = data.username;
     $("accountUsername").textContent = data.username;
     await loadPersonalCurrencyFavorites();
@@ -1919,6 +1960,8 @@
   }
 
   async function logout() {
+    if (currentUser?.is_anonymous &&
+        !confirm("Misafir hesabından çıkarsan geziye erişimini kaybedebilirsin. Yine de çıkış yapılsın mı?")) return;
     await client.auth.signOut();
     setScreen("auth");
   }
@@ -1936,6 +1979,7 @@
 
     setupNewTripCurrencyForm();
     $("authForm").addEventListener("submit", handleAuthSubmit);
+    $("startGuestBtn").addEventListener("click", startGuest);
     $("showJoinRegisterBtn").addEventListener("click", ()=>$("joinRegisterForm").classList.toggle("hidden"));
     $("joinRegisterForm").addEventListener("submit", registerWithInvite);
     $("acceptInviteBtn").addEventListener("click", acceptInvite);
