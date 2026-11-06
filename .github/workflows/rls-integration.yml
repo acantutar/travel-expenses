@@ -46,9 +46,13 @@ jobs:
           psql -X -v ON_ERROR_STOP=1 -f migrations/v4_2_permissions_currencies.sql
       - name: Apply guest-profile compatibility migration (isolated only)
         run: psql -X -v ON_ERROR_STOP=1 -f migrations/v4_4_guest_profiles.sql
+      - name: Add trip-scoped named participant model (isolated only)
+        run: psql -X -v ON_ERROR_STOP=1 -f migrations/v4_5_trip_participants.sql
       - name: Verify production-like restrictive policy set
         run: psql -X -v ON_ERROR_STOP=1 -f tests/rls/20-policy-gate.sql
       - name: Test cross-trip reads and unauthorized RPC writes as two users
         run: psql -X -v ON_ERROR_STOP=1 -f tests/rls/30-cross-user.sql
       - name: Test a new anonymous user profile and trip ownership
         run: psql -X -v ON_ERROR_STOP=1 -f tests/rls/40-guest.sql
+      - name: Test named participants across two trips and guest identity
+        run: psql -X -v ON_ERROR_STOP=1 -f tests/rls/50-named-participants.sql
