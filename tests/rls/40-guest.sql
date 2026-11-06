@@ -16,6 +16,18 @@ select test.assert(
  'Guest profile created using the auth UUID, never user-controlled metadata'
 );
 
+-- Existing invitation-based password signups must keep working.
+insert into auth.users(id,email,is_anonymous,raw_user_meta_data)
+values('55555555-5555-4555-8555-555555555555',
+ 'legacyfriend@travel-expenses.app',false,'{"username":"Mevcut Arkadaş"}'::jsonb);
+select test.assert(
+  (select count(*) from public.profiles
+   where id='55555555-5555-4555-8555-555555555555'
+    and login_name='legacyfriend' and username='Mevcut Arkadaş'
+    and is_active and not is_admin)=1,
+  'Legacy synthetic-email signups still create profiles unchanged'
+);
+
 set role authenticated;
 select set_config('request.jwt.claim.sub','33333333-3333-4333-8333-333333333333',false);
 select test.assert((select count(*) from public.profiles where id=auth.uid())=1,
