@@ -1,8 +1,11 @@
 name: iPhone Duo 512GB Night Sky Stock Watch
 
 on:
+  push:
+    paths:
+      - '.github/workflows/iphone-duo-stock-watch.yml'
   schedule:
-    - cron: '*/20 * * * *'
+    - cron: '7,27,47 * * * *'
   workflow_dispatch:
 
 permissions:
