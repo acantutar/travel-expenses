@@ -74,10 +74,11 @@ jobs:
         env:
           UI_SCREENSHOTS: "1"
         run: node tests/ui-layout-smoke.mjs
-      - name: Upload UI screenshots
-        if: always()
+      - name: Upload UI screenshots only when tests fail
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: tripsplit-ui-smoke
           path: ui-screenshots/
           if-no-files-found: ignore
+          retention-days: 1
